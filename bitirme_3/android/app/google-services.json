@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "96024549878",
+    "project_id": "bitirme3-835df",
+    "storage_bucket": "bitirme3-835df.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:96024549878:android:cd2a3333f1dafbfffa4fd7",
+        "android_client_info": {
+          "package_name": "com.example.bitirme_3"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAs3KmcmQCsEq_OtLoaylyp6vZNehIRz_U"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
