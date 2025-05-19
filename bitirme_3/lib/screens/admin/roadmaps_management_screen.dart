@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:bitirme_3/services/admin_service.dart';
 import 'package:bitirme_3/models/roadmap.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:bitirme_3/screens/admin/roadmap_steps_screen.dart';
 
 class RoadmapsManagementScreen extends StatefulWidget {
   const RoadmapsManagementScreen({Key? key}) : super(key: key);
@@ -126,14 +127,7 @@ class _RoadmapsManagementScreenState extends State<RoadmapsManagementScreen> {
         ],
       ),
       floatingActionButton: FloatingActionButton(
-        onPressed: () {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text(
-                  'Yol haritası ekleme işlevi henüz geliştirilme aşamasındadır.'),
-            ),
-          );
-        },
+        onPressed: _showAddRoadmapDialog,
         backgroundColor: Colors.green,
         child: const Icon(Icons.add),
       ),
@@ -197,7 +191,9 @@ class _RoadmapsManagementScreenState extends State<RoadmapsManagementScreen> {
                                     overflow: TextOverflow.ellipsis,
                                   ),
                                   const SizedBox(height: 4),
-                                  Row(
+                                  Wrap(
+                                    spacing: 8,
+                                    runSpacing: 4,
                                     children: [
                                       Container(
                                         padding: const EdgeInsets.symmetric(
@@ -216,7 +212,6 @@ class _RoadmapsManagementScreenState extends State<RoadmapsManagementScreen> {
                                           ),
                                         ),
                                       ),
-                                      const SizedBox(width: 8),
                                       Container(
                                         padding: const EdgeInsets.symmetric(
                                             horizontal: 8, vertical: 2),
@@ -226,6 +221,7 @@ class _RoadmapsManagementScreenState extends State<RoadmapsManagementScreen> {
                                               BorderRadius.circular(12),
                                         ),
                                         child: Row(
+                                          mainAxisSize: MainAxisSize.min,
                                           children: [
                                             Icon(
                                               Icons.calendar_today,
@@ -243,24 +239,62 @@ class _RoadmapsManagementScreenState extends State<RoadmapsManagementScreen> {
                                           ],
                                         ),
                                       ),
-                                      if (data['category'] != null)
-                                        Padding(
-                                          padding:
-                                              const EdgeInsets.only(left: 8.0),
-                                          child: Container(
+                                      // Adım sayısını gösteren etiket
+                                      FutureBuilder<QuerySnapshot>(
+                                        future: FirebaseFirestore.instance
+                                            .collection('roadmaps')
+                                            .doc(roadmap.id)
+                                            .collection('steps')
+                                            .get(),
+                                        builder: (context, snapshot) {
+                                          int stepCount = 0;
+                                          if (snapshot.hasData) {
+                                            stepCount =
+                                                snapshot.data!.docs.length;
+                                          }
+                                          return Container(
                                             padding: const EdgeInsets.symmetric(
                                                 horizontal: 8, vertical: 2),
                                             decoration: BoxDecoration(
-                                              color: Colors.amber.shade100,
+                                              color: Colors.teal.shade50,
                                               borderRadius:
                                                   BorderRadius.circular(12),
                                             ),
-                                            child: Text(
-                                              data['category'],
-                                              style: TextStyle(
-                                                fontSize: 12,
-                                                color: Colors.amber.shade900,
-                                              ),
+                                            child: Row(
+                                              mainAxisSize: MainAxisSize.min,
+                                              children: [
+                                                Icon(
+                                                  Icons.route_outlined,
+                                                  size: 14,
+                                                  color: Colors.teal.shade800,
+                                                ),
+                                                const SizedBox(width: 4),
+                                                Text(
+                                                  '$stepCount adım',
+                                                  style: TextStyle(
+                                                    fontSize: 12,
+                                                    color: Colors.teal.shade800,
+                                                  ),
+                                                ),
+                                              ],
+                                            ),
+                                          );
+                                        },
+                                      ),
+                                      if (data['category'] != null)
+                                        Container(
+                                          padding: const EdgeInsets.symmetric(
+                                              horizontal: 8, vertical: 2),
+                                          decoration: BoxDecoration(
+                                            color: Colors.amber.shade100,
+                                            borderRadius:
+                                                BorderRadius.circular(12),
+                                          ),
+                                          child: Text(
+                                            data['category'],
+                                            style: TextStyle(
+                                              fontSize: 12,
+                                              color: Colors.amber.shade900,
                                             ),
                                           ),
                                         ),
@@ -271,7 +305,30 @@ class _RoadmapsManagementScreenState extends State<RoadmapsManagementScreen> {
                               trailing: Row(
                                 mainAxisSize: MainAxisSize.min,
                                 children: [
-                                  // Detay butonu
+                                  // Adımları yönet butonu
+                                  IconButton(
+                                    icon: const Icon(Icons.route,
+                                        color: Colors.teal),
+                                    onPressed: () {
+                                      // Adımları yönetme ekranına git
+                                      Navigator.push(
+                                        context,
+                                        MaterialPageRoute(
+                                          builder: (context) =>
+                                              RoadmapStepsScreen(
+                                            roadmapId: roadmap.id,
+                                            roadmapTitle: data['title'] ??
+                                                'İsimsiz Yol Haritası',
+                                          ),
+                                        ),
+                                      ).then((_) {
+                                        // Adımlar ekranından dönüldüğünde sayfayı yenileyelim
+                                        setState(() {});
+                                      });
+                                    },
+                                    tooltip: 'Adımları Yönet',
+                                  ),
+                                  // Düzenle butonu
                                   IconButton(
                                     icon: const Icon(Icons.edit),
                                     onPressed: () {
@@ -355,6 +412,12 @@ class _RoadmapsManagementScreenState extends State<RoadmapsManagementScreen> {
                                   ),
                                 ],
                               ),
+                              onExpansionChanged: (expanded) {
+                                // Eğer genişletilirse, yenileme yapmak için setState'i tetikle
+                                if (expanded) {
+                                  setState(() {});
+                                }
+                              },
                               children: [
                                 FutureBuilder<QuerySnapshot>(
                                   future: FirebaseFirestore.instance
@@ -375,10 +438,43 @@ class _RoadmapsManagementScreenState extends State<RoadmapsManagementScreen> {
 
                                     if (!snapshot.hasData ||
                                         snapshot.data!.docs.isEmpty) {
-                                      return const Padding(
-                                        padding: EdgeInsets.all(16.0),
-                                        child: Text(
-                                            'Bu yol haritasına ait adım bulunamadı.'),
+                                      // Eğer adım bulunamazsa, admin panel üzerinden adım ekleme sayfasına gitme seçeneği sunalım
+                                      return Padding(
+                                        padding: const EdgeInsets.all(16.0),
+                                        child: Column(
+                                          children: [
+                                            const Text(
+                                              'Bu yol haritasına ait adım bulunamadı.',
+                                              style: TextStyle(fontSize: 14),
+                                            ),
+                                            const SizedBox(height: 8),
+                                            ElevatedButton.icon(
+                                              onPressed: () {
+                                                Navigator.push(
+                                                  context,
+                                                  MaterialPageRoute(
+                                                    builder: (context) =>
+                                                        RoadmapStepsScreen(
+                                                      roadmapId: roadmap.id,
+                                                      roadmapTitle: data[
+                                                              'title'] ??
+                                                          'İsimsiz Yol Haritası',
+                                                    ),
+                                                  ),
+                                                ).then((_) {
+                                                  // Geri döndüğünde sayfayı yenileyelim
+                                                  setState(() {});
+                                                });
+                                              },
+                                              icon: const Icon(Icons.add),
+                                              label: const Text('Adım Ekle'),
+                                              style: ElevatedButton.styleFrom(
+                                                backgroundColor:
+                                                    Colors.teal.shade700,
+                                              ),
+                                            ),
+                                          ],
+                                        ),
                                       );
                                     }
 
@@ -528,5 +624,186 @@ class _RoadmapsManagementScreenState extends State<RoadmapsManagementScreen> {
         ],
       ),
     );
+  }
+
+  void _showAddRoadmapDialog() {
+    final titleController = TextEditingController();
+    final descriptionController = TextEditingController();
+    final imageUrlController = TextEditingController();
+    final categoryController = TextEditingController();
+    final durationWeeksController = TextEditingController(text: '12');
+    CareerPath selectedCareerPath = CareerPath.networkSecurity;
+
+    showDialog(
+      context: context,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setState) => AlertDialog(
+          title: const Text('Yeni Yol Haritası Ekle'),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                TextField(
+                  controller: titleController,
+                  decoration: const InputDecoration(
+                    labelText: 'Başlık',
+                    hintText: 'Yol haritası başlığını girin',
+                  ),
+                ),
+                const SizedBox(height: 16),
+                TextField(
+                  controller: descriptionController,
+                  decoration: const InputDecoration(
+                    labelText: 'Açıklama',
+                    hintText: 'Yol haritası açıklamasını girin',
+                  ),
+                  maxLines: 3,
+                ),
+                const SizedBox(height: 16),
+                TextField(
+                  controller: imageUrlController,
+                  decoration: const InputDecoration(
+                    labelText: 'Görsel URL',
+                    hintText: 'Yol haritası görsel URL\'sini girin',
+                  ),
+                ),
+                const SizedBox(height: 16),
+                TextField(
+                  controller: categoryController,
+                  decoration: const InputDecoration(
+                    labelText: 'Kategori',
+                    hintText: 'Yol haritası kategorisi',
+                  ),
+                ),
+                const SizedBox(height: 16),
+                TextField(
+                  controller: durationWeeksController,
+                  decoration: const InputDecoration(
+                    labelText: 'Tahmini Süre (hafta)',
+                    hintText: 'Tamamlanma süresi',
+                  ),
+                  keyboardType: TextInputType.number,
+                ),
+                const SizedBox(height: 16),
+                DropdownButtonFormField<CareerPath>(
+                  value: selectedCareerPath,
+                  decoration: const InputDecoration(
+                    labelText: 'Kariyer Yolu',
+                    border: OutlineInputBorder(),
+                  ),
+                  items: CareerPath.values.map((path) {
+                    return DropdownMenuItem<CareerPath>(
+                      value: path,
+                      child:
+                          Text(_getCareerPathText(_getCareerPathString(path))),
+                    );
+                  }).toList(),
+                  onChanged: (newValue) {
+                    if (newValue != null) {
+                      setState(() {
+                        selectedCareerPath = newValue;
+                      });
+                    }
+                  },
+                ),
+                const SizedBox(height: 16),
+                const Text(
+                  'Not: Yol haritası oluşturduktan sonra "Adımları Yönet" butonuna tıklayarak adımlar ekleyebilirsiniz.',
+                  style: TextStyle(
+                    color: Colors.grey,
+                    fontSize: 12,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('İptal'),
+            ),
+            ElevatedButton(
+              onPressed: () async {
+                if (titleController.text.trim().isEmpty) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text('Başlık boş olamaz'),
+                      backgroundColor: Colors.red,
+                    ),
+                  );
+                  return;
+                }
+
+                try {
+                  // Yeni boş bir Roadmap oluştur
+                  final newRoadmap = Roadmap(
+                    id: '', // ID Firebase tarafından otomatik oluşturulacak
+                    title: titleController.text.trim(),
+                    description: descriptionController.text.trim(),
+                    imageUrl: imageUrlController.text.trim(),
+                    category: categoryController.text.trim(),
+                    estimatedDurationWeeks:
+                        int.tryParse(durationWeeksController.text) ?? 12,
+                    careerPath: selectedCareerPath,
+                    steps: [], // Adımlar henüz eklenmediği için boş liste
+                  );
+
+                  // Roadmap'i Firestore'a ekle
+                  await FirebaseFirestore.instance.collection('roadmaps').add({
+                    ...newRoadmap.toMap(),
+                    'createdAt': FieldValue.serverTimestamp(),
+                    'updatedAt': FieldValue.serverTimestamp(),
+                  });
+
+                  if (mounted) {
+                    Navigator.pop(context);
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        content: Text(
+                            'Yol haritası başarıyla eklendi. Şimdi adımlar ekleyebilirsiniz.'),
+                        backgroundColor: Colors.green,
+                      ),
+                    );
+                    _loadRoadmaps(); // Listeyi yenile
+                  }
+                } catch (e) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text('Yol haritası eklenirken hata oluştu: $e'),
+                      backgroundColor: Colors.red,
+                    ),
+                  );
+                }
+              },
+              child: const Text('Ekle'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  String _getCareerPathString(CareerPath path) {
+    switch (path) {
+      case CareerPath.networkSecurity:
+        return 'networkSecurity';
+      case CareerPath.applicationSecurity:
+        return 'applicationSecurity';
+      case CareerPath.cloudSecurity:
+        return 'cloudSecurity';
+      case CareerPath.penetrationTesting:
+        return 'penetrationTesting';
+      case CareerPath.securityAnalyst:
+        return 'securityAnalyst';
+      case CareerPath.incidentResponse:
+        return 'incidentResponse';
+      case CareerPath.cryptography:
+        return 'cryptography';
+    }
+  }
+
+  // Yol haritasına adım eklemek için daha kapsamlı bir form ekleyebiliriz (sonraki aşama)
+  void _showAddStepDialog(String roadmapId) {
+    // TODO: Yol haritasına adım ekleme formunu ekle
   }
 }

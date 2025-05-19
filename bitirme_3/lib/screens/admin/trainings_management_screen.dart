@@ -32,17 +32,26 @@ class _TrainingsManagementScreenState extends State<TrainingsManagementScreen> {
     try {
       final snapshot =
           await FirebaseFirestore.instance.collection('trainings').get();
-      setState(() {
-        _trainings = snapshot.docs;
-        _filteredTrainings = snapshot.docs;
-        _isLoading = false;
-      });
+
+      if (mounted) {
+        setState(() {
+          _trainings = snapshot.docs;
+          _filteredTrainings = snapshot.docs;
+          _isLoading = false;
+        });
+
+        // Sonuçları logla - Debug için
+        print('Yüklenen eğitim sayısı: ${snapshot.docs.length}');
+        for (var doc in snapshot.docs) {
+          print('Eğitim ID: ${doc.id}, Başlık: ${doc.data()['title']}');
+        }
+      }
     } catch (e) {
       print('Eğitimler yüklenirken hata: $e');
-      setState(() {
-        _isLoading = false;
-      });
       if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text('Eğitimler yüklenirken bir hata oluştu: $e'),
@@ -118,14 +127,7 @@ class _TrainingsManagementScreenState extends State<TrainingsManagementScreen> {
         ],
       ),
       floatingActionButton: FloatingActionButton(
-        onPressed: () {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text(
-                  'Eğitim ekleme işlevi henüz geliştirilme aşamasındadır.'),
-            ),
-          );
-        },
+        onPressed: _showAddTrainingDialog,
         backgroundColor: Colors.green,
         child: const Icon(Icons.add),
       ),
@@ -264,15 +266,9 @@ class _TrainingsManagementScreenState extends State<TrainingsManagementScreen> {
                                   IconButton(
                                     icon: const Icon(Icons.edit),
                                     onPressed: () {
-                                      ScaffoldMessenger.of(context)
-                                          .showSnackBar(
-                                        const SnackBar(
-                                          content: Text(
-                                              'Eğitim düzenleme henüz geliştirilme aşamasındadır.'),
-                                        ),
-                                      );
+                                      _showAddContentDialog(training.id);
                                     },
-                                    tooltip: 'Düzenle',
+                                    tooltip: 'İçerik Ekle',
                                   ),
                                   // Sil butonu
                                   IconButton(
@@ -487,5 +483,366 @@ class _TrainingsManagementScreenState extends State<TrainingsManagementScreen> {
       default:
         return Icons.help_outline;
     }
+  }
+
+  void _showAddTrainingDialog() {
+    final titleController = TextEditingController();
+    final descriptionController = TextEditingController();
+    final imageUrlController = TextEditingController();
+    final instructorController = TextEditingController();
+    final durationHoursController = TextEditingController(text: '10');
+    final skillsController = TextEditingController();
+    final moduleIdController = TextEditingController();
+    TrainingLevel selectedLevel = TrainingLevel.beginner;
+
+    showDialog(
+      context: context,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setState) => AlertDialog(
+          title: const Text('Yeni Eğitim Ekle'),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                TextField(
+                  controller: titleController,
+                  decoration: const InputDecoration(
+                    labelText: 'Başlık',
+                    hintText: 'Eğitim başlığını girin',
+                  ),
+                ),
+                const SizedBox(height: 16),
+                TextField(
+                  controller: descriptionController,
+                  decoration: const InputDecoration(
+                    labelText: 'Açıklama',
+                    hintText: 'Eğitim açıklamasını girin',
+                  ),
+                  maxLines: 3,
+                ),
+                const SizedBox(height: 16),
+                TextField(
+                  controller: imageUrlController,
+                  decoration: const InputDecoration(
+                    labelText: 'Görsel URL',
+                    hintText: 'Eğitim görsel URL\'sini girin',
+                  ),
+                ),
+                const SizedBox(height: 16),
+                TextField(
+                  controller: moduleIdController,
+                  decoration: const InputDecoration(
+                    labelText: 'Modül ID',
+                    hintText: 'Bağlı olduğu modül ID\'si',
+                  ),
+                ),
+                const SizedBox(height: 16),
+                TextField(
+                  controller: instructorController,
+                  decoration: const InputDecoration(
+                    labelText: 'Eğitmen',
+                    hintText: 'Eğitmenin adı',
+                  ),
+                ),
+                const SizedBox(height: 16),
+                TextField(
+                  controller: durationHoursController,
+                  decoration: const InputDecoration(
+                    labelText: 'Süre (saat)',
+                    hintText: 'Eğitim süresi',
+                  ),
+                  keyboardType: TextInputType.number,
+                ),
+                const SizedBox(height: 16),
+                TextField(
+                  controller: skillsController,
+                  decoration: const InputDecoration(
+                    labelText: 'Yetenekler (virgülle ayırın)',
+                    hintText: 'Örn: Ağ Analizi, Sızma Testi',
+                  ),
+                ),
+                const SizedBox(height: 16),
+                DropdownButtonFormField<TrainingLevel>(
+                  value: selectedLevel,
+                  decoration: const InputDecoration(
+                    labelText: 'Eğitim Seviyesi',
+                    border: OutlineInputBorder(),
+                  ),
+                  items: TrainingLevel.values.map((level) {
+                    return DropdownMenuItem<TrainingLevel>(
+                      value: level,
+                      child:
+                          Text(_getTrainingLevelText(_getLevelString(level))),
+                    );
+                  }).toList(),
+                  onChanged: (newValue) {
+                    if (newValue != null) {
+                      setState(() {
+                        selectedLevel = newValue;
+                      });
+                    }
+                  },
+                ),
+                const SizedBox(height: 16),
+                const Text(
+                  'Not: Eğitim oluşturduktan sonra ayrı bir ekrandan içerikler ekleyebileceksiniz.',
+                  style: TextStyle(
+                    color: Colors.grey,
+                    fontSize: 12,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('İptal'),
+            ),
+            ElevatedButton(
+              onPressed: () async {
+                if (titleController.text.trim().isEmpty) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text('Başlık boş olamaz'),
+                      backgroundColor: Colors.red,
+                    ),
+                  );
+                  return;
+                }
+
+                try {
+                  // Yetenekleri virgülle ayırıp liste haline getir
+                  List<String> skills = [];
+                  if (skillsController.text.isNotEmpty) {
+                    skills = skillsController.text
+                        .split(',')
+                        .map((s) => s.trim())
+                        .where((s) => s.isNotEmpty)
+                        .toList();
+                  }
+
+                  // Eğitim verisini hazırla
+                  final trainingData = {
+                    'title': titleController.text.trim(),
+                    'description': descriptionController.text.trim(),
+                    'imageUrl': imageUrlController.text.trim(),
+                    'instructor': instructorController.text.trim(),
+                    'durationHours':
+                        int.tryParse(durationHoursController.text) ?? 10,
+                    'level': _getLevelString(selectedLevel),
+                    'skills': skills,
+                    'createdAt': FieldValue.serverTimestamp(),
+                    'updatedAt': FieldValue.serverTimestamp(),
+                  };
+
+                  // Modül ID'si ekle
+                  if (moduleIdController.text.trim().isNotEmpty) {
+                    trainingData['moduleId'] = moduleIdController.text.trim();
+                  }
+
+                  // Firebase'e ekle
+                  await FirebaseFirestore.instance
+                      .collection('trainings')
+                      .add(trainingData);
+
+                  if (mounted) {
+                    Navigator.pop(context);
+
+                    // Eğitim ekledikten sonra listeyi hemen güncelle
+                    _loadTrainings();
+
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        content: Text(
+                            'Eğitim başarıyla eklendi. Şimdi içerikler ekleyebilirsiniz.'),
+                        backgroundColor: Colors.green,
+                      ),
+                    );
+                  }
+                } catch (e) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text('Eğitim eklenirken hata oluştu: $e'),
+                      backgroundColor: Colors.red,
+                    ),
+                  );
+                }
+              },
+              child: const Text('Ekle'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  String _getLevelString(TrainingLevel level) {
+    switch (level) {
+      case TrainingLevel.beginner:
+        return 'beginner';
+      case TrainingLevel.intermediate:
+        return 'intermediate';
+      case TrainingLevel.advanced:
+        return 'advanced';
+      case TrainingLevel.expert:
+        return 'expert';
+    }
+  }
+
+  // Eğitime içerik eklemek için form
+  void _showAddContentDialog(String trainingId) {
+    final titleController = TextEditingController();
+    final descriptionController = TextEditingController();
+    final urlController = TextEditingController();
+    final durationController = TextEditingController(text: '30');
+    final orderController = TextEditingController(text: '1');
+    String selectedType = 'video'; // Varsayılan içerik tipi
+
+    showDialog(
+      context: context,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setState) => AlertDialog(
+          title: const Text('Yeni İçerik Ekle'),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                TextField(
+                  controller: titleController,
+                  decoration: const InputDecoration(
+                    labelText: 'Başlık',
+                    hintText: 'İçerik başlığını girin',
+                  ),
+                ),
+                const SizedBox(height: 16),
+                TextField(
+                  controller: descriptionController,
+                  decoration: const InputDecoration(
+                    labelText: 'Açıklama',
+                    hintText: 'İçerik açıklamasını girin',
+                  ),
+                  maxLines: 3,
+                ),
+                const SizedBox(height: 16),
+                DropdownButtonFormField<String>(
+                  value: selectedType,
+                  decoration: const InputDecoration(
+                    labelText: 'İçerik Tipi',
+                    border: OutlineInputBorder(),
+                  ),
+                  items: [
+                    DropdownMenuItem(value: 'video', child: Text('Video')),
+                    DropdownMenuItem(value: 'document', child: Text('Doküman')),
+                    DropdownMenuItem(
+                        value: 'presentation', child: Text('Sunum')),
+                    DropdownMenuItem(
+                        value: 'codeLab', child: Text('Kod Laboratuvarı')),
+                    DropdownMenuItem(
+                        value: 'exercise', child: Text('Alıştırma')),
+                  ],
+                  onChanged: (value) {
+                    if (value != null) {
+                      setState(() {
+                        selectedType = value;
+                      });
+                    }
+                  },
+                ),
+                const SizedBox(height: 16),
+                TextField(
+                  controller: urlController,
+                  decoration: const InputDecoration(
+                    labelText: 'URL',
+                    hintText: 'İçerik bağlantısını girin',
+                  ),
+                ),
+                const SizedBox(height: 16),
+                TextField(
+                  controller: durationController,
+                  decoration: const InputDecoration(
+                    labelText: 'Süre (dakika)',
+                    hintText: 'İçerik süresi',
+                  ),
+                  keyboardType: TextInputType.number,
+                ),
+                const SizedBox(height: 16),
+                TextField(
+                  controller: orderController,
+                  decoration: const InputDecoration(
+                    labelText: 'Sıralama',
+                    hintText: 'İçerik sıralama değeri',
+                  ),
+                  keyboardType: TextInputType.number,
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('İptal'),
+            ),
+            ElevatedButton(
+              onPressed: () async {
+                if (titleController.text.trim().isEmpty) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text('Başlık boş olamaz'),
+                      backgroundColor: Colors.red,
+                    ),
+                  );
+                  return;
+                }
+
+                try {
+                  // İçerik verisini hazırla
+                  final contentData = {
+                    'title': titleController.text.trim(),
+                    'description': descriptionController.text.trim(),
+                    'type': selectedType,
+                    'url': urlController.text.trim(),
+                    'durationMinutes':
+                        int.tryParse(durationController.text) ?? 30,
+                    'order': int.tryParse(orderController.text) ?? 1,
+                    'createdAt': FieldValue.serverTimestamp(),
+                    'updatedAt': FieldValue.serverTimestamp(),
+                  };
+
+                  // Firebase'e ekle
+                  await FirebaseFirestore.instance
+                      .collection('trainings')
+                      .doc(trainingId)
+                      .collection('contents')
+                      .add(contentData);
+
+                  if (mounted) {
+                    Navigator.pop(context);
+
+                    // İçerik ekledikten sonra listeyi güncelle
+                    _loadTrainings();
+
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        content: Text('İçerik başarıyla eklendi'),
+                        backgroundColor: Colors.green,
+                      ),
+                    );
+                  }
+                } catch (e) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text('İçerik eklenirken hata oluştu: $e'),
+                      backgroundColor: Colors.red,
+                    ),
+                  );
+                }
+              },
+              child: const Text('Ekle'),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 }

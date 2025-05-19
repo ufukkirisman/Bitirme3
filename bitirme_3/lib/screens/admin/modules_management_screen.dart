@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:bitirme_3/services/admin_service.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:bitirme_3/models/module.dart';
 
 class ModulesManagementScreen extends StatefulWidget {
   const ModulesManagementScreen({Key? key}) : super(key: key);
@@ -73,6 +74,7 @@ class _ModulesManagementScreenState extends State<ModulesManagementScreen> {
     final titleController = TextEditingController();
     final descriptionController = TextEditingController();
     final imageUrlController = TextEditingController();
+    final orderController = TextEditingController(text: '0');
 
     showDialog(
       context: context,
@@ -106,6 +108,15 @@ class _ModulesManagementScreenState extends State<ModulesManagementScreen> {
                   hintText: 'Modül görsel URL\'sini girin',
                 ),
               ),
+              const SizedBox(height: 16),
+              TextField(
+                controller: orderController,
+                decoration: const InputDecoration(
+                  labelText: 'Sıralama',
+                  hintText: 'Modül sıralama numarası',
+                ),
+                keyboardType: TextInputType.number,
+              ),
             ],
           ),
         ),
@@ -127,10 +138,20 @@ class _ModulesManagementScreenState extends State<ModulesManagementScreen> {
               }
 
               try {
+                // Yeni boş bir Module oluştur
+                final newModule = Module(
+                  id: '', // ID Firebase tarafından otomatik oluşturulacak
+                  title: titleController.text.trim(),
+                  description: descriptionController.text.trim(),
+                  imageUrl: imageUrlController.text.trim(),
+                  lessons: [], // Dersler henüz eklenmediği için boş liste
+                  progress: 0, // İlerleme başlangıçta 0
+                );
+
+                // Module'ü Firestore'a ekle
                 await FirebaseFirestore.instance.collection('modules').add({
-                  'title': titleController.text.trim(),
-                  'description': descriptionController.text.trim(),
-                  'imageUrl': imageUrlController.text.trim(),
+                  ...newModule.toMap(),
+                  'order': int.tryParse(orderController.text) ?? 0,
                   'createdAt': FieldValue.serverTimestamp(),
                   'updatedAt': FieldValue.serverTimestamp(),
                 });
@@ -516,99 +537,170 @@ class _ModuleLessonsScreenState extends State<ModuleLessonsScreen> {
   void _showAddLessonDialog() {
     final titleController = TextEditingController();
     final contentController = TextEditingController();
-    final orderController = TextEditingController();
+    final durationController = TextEditingController(text: '30');
+    final orderController = TextEditingController(text: '1');
+    final quizIdController = TextEditingController();
+    final simulationIdController = TextEditingController();
+    String selectedType = 'theory'; // Varsayılan değer
 
     showDialog(
       context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Yeni Ders Ekle'),
-        content: SingleChildScrollView(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              TextField(
-                controller: titleController,
-                decoration: const InputDecoration(
-                  labelText: 'Başlık',
-                  hintText: 'Ders başlığını girin',
-                ),
-              ),
-              const SizedBox(height: 16),
-              TextField(
-                controller: contentController,
-                decoration: const InputDecoration(
-                  labelText: 'İçerik',
-                  hintText: 'Ders içeriğini girin',
-                ),
-                maxLines: 5,
-              ),
-              const SizedBox(height: 16),
-              TextField(
-                controller: orderController,
-                decoration: const InputDecoration(
-                  labelText: 'Sıra',
-                  hintText: 'Ders sırasını girin (1, 2, 3, ...)',
-                ),
-                keyboardType: TextInputType.number,
-              ),
-            ],
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('İptal'),
-          ),
-          ElevatedButton(
-            onPressed: () async {
-              if (titleController.text.trim().isEmpty) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(
-                    content: Text('Başlık boş olamaz'),
-                    backgroundColor: Colors.red,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setState) => AlertDialog(
+          title: const Text('Yeni Ders Ekle'),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                TextField(
+                  controller: titleController,
+                  decoration: const InputDecoration(
+                    labelText: 'Başlık',
+                    hintText: 'Ders başlığını girin',
                   ),
-                );
-                return;
-              }
-
-              try {
-                final order =
-                    int.tryParse(orderController.text) ?? _lessons.length + 1;
-
-                await FirebaseFirestore.instance
-                    .collection('modules')
-                    .doc(widget.moduleId)
-                    .collection('lessons')
-                    .add({
-                  'title': titleController.text.trim(),
-                  'content': contentController.text.trim(),
-                  'order': order,
-                  'createdAt': FieldValue.serverTimestamp(),
-                  'updatedAt': FieldValue.serverTimestamp(),
-                });
-
-                if (mounted) {
-                  Navigator.pop(context);
+                ),
+                const SizedBox(height: 16),
+                TextField(
+                  controller: contentController,
+                  decoration: const InputDecoration(
+                    labelText: 'İçerik',
+                    hintText: 'Ders içeriğini girin',
+                  ),
+                  maxLines: 5,
+                ),
+                const SizedBox(height: 16),
+                DropdownButtonFormField<String>(
+                  value: selectedType,
+                  decoration: const InputDecoration(
+                    labelText: 'Ders Tipi',
+                    border: OutlineInputBorder(),
+                  ),
+                  items: [
+                    DropdownMenuItem(value: 'theory', child: Text('Teori')),
+                    DropdownMenuItem(value: 'quiz', child: Text('Quiz')),
+                    DropdownMenuItem(
+                        value: 'simulation', child: Text('Simülasyon')),
+                  ],
+                  onChanged: (value) {
+                    if (value != null) {
+                      setState(() {
+                        selectedType = value;
+                      });
+                    }
+                  },
+                ),
+                const SizedBox(height: 16),
+                TextField(
+                  controller: durationController,
+                  decoration: const InputDecoration(
+                    labelText: 'Süre (dakika)',
+                    hintText: 'Ders süresini girin',
+                  ),
+                  keyboardType: TextInputType.number,
+                ),
+                const SizedBox(height: 16),
+                TextField(
+                  controller: orderController,
+                  decoration: const InputDecoration(
+                    labelText: 'Sıra',
+                    hintText: 'Ders sırasını girin (1, 2, 3, ...)',
+                  ),
+                  keyboardType: TextInputType.number,
+                ),
+                if (selectedType == 'quiz')
+                  Padding(
+                    padding: const EdgeInsets.only(top: 16.0),
+                    child: TextField(
+                      controller: quizIdController,
+                      decoration: const InputDecoration(
+                        labelText: 'Quiz ID',
+                        hintText: 'Bağlantılı quiz ID\'sini girin',
+                      ),
+                    ),
+                  ),
+                if (selectedType == 'simulation')
+                  Padding(
+                    padding: const EdgeInsets.only(top: 16.0),
+                    child: TextField(
+                      controller: simulationIdController,
+                      decoration: const InputDecoration(
+                        labelText: 'Simülasyon ID',
+                        hintText: 'Bağlantılı simülasyon ID\'sini girin',
+                      ),
+                    ),
+                  ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('İptal'),
+            ),
+            ElevatedButton(
+              onPressed: () async {
+                if (titleController.text.trim().isEmpty) {
                   ScaffoldMessenger.of(context).showSnackBar(
                     const SnackBar(
-                      content: Text('Ders başarıyla eklendi'),
-                      backgroundColor: Colors.green,
+                      content: Text('Başlık boş olamaz'),
+                      backgroundColor: Colors.red,
                     ),
                   );
-                  _loadModuleAndLessons(); // Listeyi yenile
+                  return;
                 }
-              } catch (e) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(
-                    content: Text('Ders eklenirken hata oluştu: $e'),
-                    backgroundColor: Colors.red,
-                  ),
-                );
-              }
-            },
-            child: const Text('Ekle'),
-          ),
-        ],
+
+                try {
+                  final Map<String, dynamic> lessonData = {
+                    'title': titleController.text.trim(),
+                    'content': contentController.text.trim(),
+                    'type': selectedType,
+                    'durationMinutes':
+                        int.tryParse(durationController.text) ?? 30,
+                    'order': int.tryParse(orderController.text) ?? 1,
+                    'createdAt': FieldValue.serverTimestamp(),
+                    'updatedAt': FieldValue.serverTimestamp(),
+                  };
+
+                  if (selectedType == 'quiz' &&
+                      quizIdController.text.trim().isNotEmpty) {
+                    lessonData['quizId'] = quizIdController.text.trim();
+                  }
+
+                  if (selectedType == 'simulation' &&
+                      simulationIdController.text.trim().isNotEmpty) {
+                    lessonData['simulationId'] =
+                        simulationIdController.text.trim();
+                  }
+
+                  await FirebaseFirestore.instance
+                      .collection('modules')
+                      .doc(widget.moduleId)
+                      .collection('lessons')
+                      .add(lessonData);
+
+                  if (mounted) {
+                    Navigator.pop(context);
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        content: Text('Ders başarıyla eklendi'),
+                        backgroundColor: Colors.green,
+                      ),
+                    );
+                    _loadModuleAndLessons();
+                  }
+                } catch (e) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text('Ders eklenirken hata oluştu: $e'),
+                      backgroundColor: Colors.red,
+                    ),
+                  );
+                }
+              },
+              child: const Text('Ekle'),
+            ),
+          ],
+        ),
       ),
     );
   }

@@ -3,7 +3,8 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'dart:async';
-import 'package:bitirme_3/services/database_service.dart';
+import 'package:bitirme_3/services/module_service.dart';
+import 'package:bitirme_3/models/quiz.dart';
 
 class QuizScreen extends StatefulWidget {
   final String quizId;
@@ -19,13 +20,12 @@ class QuizScreen extends StatefulWidget {
 
 class _QuizScreenState extends State<QuizScreen> {
   bool _isLoading = true;
-  Map<String, dynamic>? _quizData;
+  Quiz? _quiz;
   String _errorMessage = '';
-  final DatabaseService _databaseService = DatabaseService();
+  final ModuleService _moduleService = ModuleService();
 
   // Quiz durumu
   int _currentQuestionIndex = 0;
-  List<Map<String, dynamic>> _questions = [];
   Map<int, int> _userAnswers = {}; // questionIndex -> answerIndex
   bool _quizCompleted = false;
   int _score = 0;
@@ -54,10 +54,10 @@ class _QuizScreenState extends State<QuizScreen> {
         _errorMessage = '';
       });
 
-      // Quiz verilerini DatabaseService üzerinden al
-      final quizDoc = await _databaseService.getQuizById(widget.quizId);
+      // Quiz verilerini ModuleService üzerinden al
+      final quiz = await _moduleService.getQuizById(widget.quizId);
 
-      if (quizDoc == null || !quizDoc.exists) {
+      if (quiz == null) {
         setState(() {
           _isLoading = false;
           _errorMessage = 'Quiz bulunamadı';
@@ -65,23 +65,18 @@ class _QuizScreenState extends State<QuizScreen> {
         return;
       }
 
-      final data = quizDoc.data() as Map<String, dynamic>;
-      final questionsData = data['questions'] as List<dynamic>;
-
-      // Soruları dönüştür
-      _questions = questionsData.map((q) => q as Map<String, dynamic>).toList();
+      print('Quiz yüklendi: ${quiz.title}, ${quiz.questions.length} soru');
 
       // Toplam puanı hesapla
-      _totalPoints = _questions.fold(
-          0, (sum, question) => sum + (question['points'] as int? ?? 1));
+      _totalPoints =
+          quiz.questions.fold(0, (sum, question) => sum + (question.points));
 
       // Süre sayacını başlat
-      _timeRemaining =
-          (data['timeLimit'] as int? ?? 10) * 60; // dakikayı saniyeye çevir
+      _timeRemaining = quiz.timeLimit * 60; // dakikayı saniyeye çevir
       _startTimer();
 
       setState(() {
-        _quizData = data;
+        _quiz = quiz;
         _isLoading = false;
       });
     } catch (e) {
@@ -89,6 +84,7 @@ class _QuizScreenState extends State<QuizScreen> {
         _isLoading = false;
         _errorMessage = 'Quiz detayları yüklenirken hata oluştu: $e';
       });
+      print('Quiz detayları yüklenirken hata: $e');
     }
   }
 
@@ -112,14 +108,14 @@ class _QuizScreenState extends State<QuizScreen> {
     _score = 0;
 
     _userAnswers.forEach((questionIndex, answerIndex) {
-      final question = _questions[questionIndex];
-      final answers = question['answers'] as List<dynamic>;
+      final question = _quiz!.questions[questionIndex];
+      final answers = question.answers;
 
       if (answerIndex < answers.length) {
-        final selectedAnswer = answers[answerIndex] as Map<String, dynamic>;
-        if (selectedAnswer['isCorrect'] == true) {
+        final selectedAnswer = answers[answerIndex];
+        if (selectedAnswer.isCorrect) {
           correctAnswers++;
-          _score += question['points'] as int? ?? 1;
+          _score += question.points;
         }
       }
     });
@@ -134,12 +130,11 @@ class _QuizScreenState extends State<QuizScreen> {
 
   Future<void> _saveQuizResult() async {
     try {
-      String? moduleId;
-      if (_quizData != null && _quizData!.containsKey('moduleId')) {
-        moduleId = _quizData!['moduleId'];
-      }
-
-      if (moduleId == null) {
+      String moduleId;
+      if (_quiz != null && _quiz!.moduleId != null) {
+        moduleId = _quiz!.moduleId!; // null olmayacağından emin oluyoruz
+      } else {
+        // ModuleId yoksa ana ekrana dön
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
             content: Text('Modül bilgisi bulunamadı'),
@@ -149,8 +144,8 @@ class _QuizScreenState extends State<QuizScreen> {
         return;
       }
 
-      // Quiz sonucunu DatabaseService üzerinden kaydet
-      await _databaseService.saveQuizResult(
+      // Quiz sonucunu ModuleService üzerinden kaydet
+      await _moduleService.saveQuizResult(
         widget.quizId,
         moduleId,
         _score,
@@ -173,7 +168,7 @@ class _QuizScreenState extends State<QuizScreen> {
   }
 
   void _nextQuestion() {
-    if (_currentQuestionIndex < _questions.length - 1) {
+    if (_currentQuestionIndex < _quiz!.questions.length - 1) {
       setState(() {
         _currentQuestionIndex++;
       });
@@ -195,7 +190,7 @@ class _QuizScreenState extends State<QuizScreen> {
     return WillPopScope(
       onWillPop: () async {
         // Quiz tamamlanmadıysa onay iste
-        if (!_quizCompleted && _questions.isNotEmpty) {
+        if (!_quizCompleted && _quiz!.questions.isNotEmpty) {
           return await _showExitConfirmationDialog() ?? false;
         }
         return true;
@@ -203,7 +198,7 @@ class _QuizScreenState extends State<QuizScreen> {
       child: Scaffold(
         appBar: AppBar(
           title: Text(
-            _quizData?['title'] ?? 'Quiz',
+            _quiz?.title ?? 'Quiz',
           ),
           actions: [
             if (!_quizCompleted && _timeRemaining > 0)
@@ -228,7 +223,7 @@ class _QuizScreenState extends State<QuizScreen> {
                 ? _buildErrorView()
                 : _quizCompleted
                     ? _buildResultView()
-                    : _questions.isEmpty
+                    : _quiz!.questions.isEmpty
                         ? const Center(
                             child: Text('Bu quizde soru bulunmamaktadır'))
                         : _buildQuizView(),
@@ -257,44 +252,27 @@ class _QuizScreenState extends State<QuizScreen> {
   }
 
   Widget _buildQuizView() {
-    final currentQuestion = _questions[_currentQuestionIndex];
-    final questionText = currentQuestion['text'] ?? 'Soru metni bulunamadı';
-    final answers = currentQuestion['answers'] as List<dynamic>;
+    final currentQuestion = _quiz!.questions[_currentQuestionIndex];
+    final questionText = currentQuestion.text;
+    final answers = currentQuestion.answers;
     final selectedAnswerIndex = _userAnswers[_currentQuestionIndex];
 
     return Column(
       children: [
-        // İlerleme göstergesi
-        Container(
-          height: 10,
-          decoration: BoxDecoration(
-            color: Colors.grey.shade900,
-            borderRadius: BorderRadius.circular(5),
-          ),
+        // İlerleme çubuğu
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
           child: Row(
             children: [
               Flexible(
                 flex: _currentQuestionIndex + 1,
                 child: Container(
-                  decoration: BoxDecoration(
-                    gradient: const LinearGradient(
-                      colors: [Color(0xFF00AACC), Color(0xFF00FF8F)],
-                      begin: Alignment.centerLeft,
-                      end: Alignment.centerRight,
-                    ),
-                    borderRadius: BorderRadius.circular(5),
-                    boxShadow: [
-                      BoxShadow(
-                        color: const Color(0xFF00FF8F).withOpacity(0.5),
-                        blurRadius: 6,
-                        offset: const Offset(0, 0),
-                      ),
-                    ],
-                  ),
+                  height: 4,
+                  color: Colors.green,
                 ),
               ),
               Flexible(
-                flex: _questions.length - (_currentQuestionIndex + 1),
+                flex: _quiz!.questions.length - (_currentQuestionIndex + 1),
                 child: Container(),
               ),
             ],
@@ -320,7 +298,7 @@ class _QuizScreenState extends State<QuizScreen> {
                             color: const Color(0xFF00AACC), width: 1),
                       ),
                       child: Text(
-                        'Soru ${_currentQuestionIndex + 1}/${_questions.length}',
+                        'Soru ${_currentQuestionIndex + 1}/${_quiz!.questions.length}',
                         style: const TextStyle(
                           fontSize: 14,
                           fontWeight: FontWeight.bold,
@@ -346,7 +324,7 @@ class _QuizScreenState extends State<QuizScreen> {
                           ),
                           const SizedBox(width: 4),
                           Text(
-                            '${currentQuestion['points'] ?? 1} Puan',
+                            '${currentQuestion.points} Puan',
                             style: const TextStyle(
                               fontSize: 14,
                               fontWeight: FontWeight.bold,
@@ -390,7 +368,7 @@ class _QuizScreenState extends State<QuizScreen> {
                       ),
                       const SizedBox(height: 12),
                       Text(
-                        questionText,
+                        questionText ?? 'Soru metni bulunamadı',
                         style: GoogleFonts.poppins(
                           fontSize: 18,
                           height: 1.4,
@@ -406,108 +384,10 @@ class _QuizScreenState extends State<QuizScreen> {
 
                 // Cevap seçenekleri
                 ...List.generate(answers.length, (index) {
-                  final answer = answers[index] as Map<String, dynamic>;
+                  final answer = answers[index];
                   final isSelected = selectedAnswerIndex == index;
 
-                  return Padding(
-                    padding: const EdgeInsets.only(bottom: 12.0),
-                    child: GestureDetector(
-                      onTap: () => _selectAnswer(index),
-                      child: Container(
-                        padding: const EdgeInsets.all(16),
-                        decoration: BoxDecoration(
-                          gradient: isSelected
-                              ? const LinearGradient(
-                                  colors: [
-                                    Color(0xFF00AACC),
-                                    Color(0xFF008899)
-                                  ],
-                                  begin: Alignment.topLeft,
-                                  end: Alignment.bottomRight,
-                                )
-                              : const LinearGradient(
-                                  colors: [
-                                    Color(0xFF101823),
-                                    Color(0xFF101823)
-                                  ],
-                                  begin: Alignment.topLeft,
-                                  end: Alignment.bottomRight,
-                                ),
-                          borderRadius: BorderRadius.circular(12),
-                          border: Border.all(
-                            color: isSelected
-                                ? const Color(0xFF00CCFF)
-                                : const Color(0xFF1C2D40),
-                            width: isSelected ? 2 : 1,
-                          ),
-                          boxShadow: isSelected
-                              ? [
-                                  BoxShadow(
-                                    color: const Color(0xFF00CCFF)
-                                        .withOpacity(0.2),
-                                    blurRadius: 8,
-                                    spreadRadius: 1,
-                                    offset: const Offset(0, 0),
-                                  ),
-                                ]
-                              : null,
-                        ),
-                        child: Row(
-                          children: [
-                            Container(
-                              width: 30,
-                              height: 30,
-                              decoration: BoxDecoration(
-                                shape: BoxShape.circle,
-                                color: isSelected
-                                    ? const Color(0xFF00CCFF)
-                                    : Colors.transparent,
-                                border: Border.all(
-                                  color: isSelected
-                                      ? const Color(0xFF00CCFF)
-                                      : const Color(0xFF1C2D40),
-                                  width: 2,
-                                ),
-                              ),
-                              child: isSelected
-                                  ? const Icon(
-                                      Icons.check,
-                                      size: 18,
-                                      color: Colors.white,
-                                    )
-                                  : Center(
-                                      child: Text(
-                                        String.fromCharCode(
-                                            65 + index), // A, B, C, D...
-                                        style: TextStyle(
-                                          color: isSelected
-                                              ? Colors.white
-                                              : const Color(0xFF00CCFF),
-                                          fontWeight: FontWeight.bold,
-                                        ),
-                                      ),
-                                    ),
-                            ),
-                            const SizedBox(width: 16),
-                            Expanded(
-                              child: Text(
-                                answer['text'] ?? 'Cevap metni bulunamadı',
-                                style: TextStyle(
-                                  fontSize: 16,
-                                  color: isSelected
-                                      ? Colors.white
-                                      : Colors.white70,
-                                  fontWeight: isSelected
-                                      ? FontWeight.w600
-                                      : FontWeight.normal,
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-                  );
+                  return _buildAnswerOption(index, isSelected);
                 }),
               ],
             ),
@@ -557,18 +437,18 @@ class _QuizScreenState extends State<QuizScreen> {
               // İleri veya Bitir butonu
               ElevatedButton.icon(
                 onPressed: selectedAnswerIndex != null
-                    ? _currentQuestionIndex < _questions.length - 1
+                    ? _currentQuestionIndex < _quiz!.questions.length - 1
                         ? _nextQuestion
                         : _submitQuiz
                     : null,
                 icon: Icon(
-                  _currentQuestionIndex < _questions.length - 1
+                  _currentQuestionIndex < _quiz!.questions.length - 1
                       ? Icons.arrow_forward
                       : Icons.check_circle,
                   size: 16,
                 ),
                 label: Text(
-                  _currentQuestionIndex < _questions.length - 1
+                  _currentQuestionIndex < _quiz!.questions.length - 1
                       ? 'Sonraki'
                       : 'Tamamla',
                   style: const TextStyle(
@@ -592,6 +472,60 @@ class _QuizScreenState extends State<QuizScreen> {
           ),
         ),
       ],
+    );
+  }
+
+  Widget _buildAnswerOption(int index, bool isSelected) {
+    final question = _quiz!.questions[_currentQuestionIndex];
+    final answer = question.answers[index];
+
+    return InkWell(
+      onTap: _quizCompleted ? null : () => _selectAnswer(index),
+      child: Container(
+        margin: const EdgeInsets.symmetric(vertical: 8.0, horizontal: 16.0),
+        padding: const EdgeInsets.all(16.0),
+        decoration: BoxDecoration(
+          color: isSelected
+              ? Colors.blue.withOpacity(0.2)
+              : Colors.grey.withOpacity(0.1),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(
+            color: isSelected ? Colors.blue : Colors.transparent,
+            width: 2,
+          ),
+        ),
+        child: Row(
+          children: [
+            Container(
+              width: 32,
+              height: 32,
+              decoration: BoxDecoration(
+                color: isSelected ? Colors.blue : Colors.grey.withOpacity(0.3),
+                shape: BoxShape.circle,
+              ),
+              child: Center(
+                child: Text(
+                  String.fromCharCode(65 + index), // A, B, C, D...
+                  style: TextStyle(
+                    color: isSelected ? Colors.white : Colors.grey.shade700,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(width: 16),
+            Expanded(
+              child: Text(
+                answer.text,
+                style: GoogleFonts.poppins(
+                  fontSize: 16,
+                  fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 
@@ -686,7 +620,7 @@ class _QuizScreenState extends State<QuizScreen> {
                 children: [
                   _buildResultRow(
                     'Toplam Soru',
-                    '${_questions.length}',
+                    '${_quiz!.questions.length}',
                     Icons.help_outline,
                   ),
                   const Divider(color: Colors.grey),
@@ -699,7 +633,7 @@ class _QuizScreenState extends State<QuizScreen> {
                   const Divider(color: Colors.grey),
                   _buildResultRow(
                     'Yanlış Cevaplar',
-                    '${_questions.length - _score}',
+                    '${_quiz!.questions.length - _score}',
                     Icons.cancel_outlined,
                     valueColor: Colors.red,
                   ),
@@ -741,8 +675,7 @@ class _QuizScreenState extends State<QuizScreen> {
                       _currentQuestionIndex = 0;
                       _userAnswers.clear();
                       _quizCompleted = false;
-                      _timeRemaining =
-                          (_quizData?['timeLimit'] as int? ?? 10) * 60;
+                      _timeRemaining = (_quiz!.timeLimit) * 60;
                     });
                     _startTimer();
                   },

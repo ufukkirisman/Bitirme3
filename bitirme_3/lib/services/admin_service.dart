@@ -176,16 +176,11 @@ class AdminService {
     }
   }
 
+  // Module CRUD Operations
   // Modül ekle
   Future<bool> addModule(Module module) async {
     try {
-      await _db.collection('modules').add({
-        'title': module.title,
-        'description': module.description,
-        'imageUrl': module.imageUrl,
-        'createdAt': FieldValue.serverTimestamp(),
-        'updatedAt': FieldValue.serverTimestamp(),
-      });
+      await _db.collection('modules').add(module.toMap());
       return true;
     } catch (e) {
       print('Modül eklenemedi: $e');
@@ -194,12 +189,9 @@ class AdminService {
   }
 
   // Modülü güncelle
-  Future<bool> updateModule(String moduleId, Map<String, dynamic> data) async {
+  Future<bool> updateModule(String moduleId, Module module) async {
     try {
-      await _db.collection('modules').doc(moduleId).update({
-        ...data,
-        'updatedAt': FieldValue.serverTimestamp(),
-      });
+      await _db.collection('modules').doc(moduleId).update(module.toMap());
       return true;
     } catch (e) {
       print('Modül güncellenemedi: $e');
@@ -237,34 +229,24 @@ class AdminService {
     }
   }
 
+  // Tüm modülleri getir
+  Future<List<Module>> getAllModules() async {
+    try {
+      final snapshot = await _db.collection('modules').get();
+      return snapshot.docs
+          .map((doc) => Module.fromMap(doc.data(), doc.id))
+          .toList();
+    } catch (e) {
+      print('Modüller getirilemedi: $e');
+      return [];
+    }
+  }
+
+  // Quiz CRUD Operations
   // Quiz ekle
   Future<bool> addQuiz(Quiz quiz) async {
     try {
-      final docRef = await _db.collection('quizzes').add({
-        'title': quiz.title,
-        'description': quiz.description,
-        'timeLimit': quiz.timeLimit,
-        'createdAt': FieldValue.serverTimestamp(),
-        'updatedAt': FieldValue.serverTimestamp(),
-      });
-
-      // Soruları ekle
-      for (var question in quiz.questions) {
-        await docRef.collection('questions').add({
-          'text': question.text,
-          'type': question.type.toString().split('.').last,
-          'explanation': question.explanation,
-          'points': question.points,
-          // Cevapları ekle
-          'answers': question.answers
-              .map((answer) => {
-                    'text': answer.text,
-                    'isCorrect': answer.isCorrect,
-                  })
-              .toList(),
-        });
-      }
-
+      await _db.collection('quizzes').add(quiz.toMap());
       return true;
     } catch (e) {
       print('Quiz eklenemedi: $e');
@@ -273,51 +255,9 @@ class AdminService {
   }
 
   // Quiz güncelle
-  Future<bool> updateQuiz(String quizId, Map<String, dynamic> data,
-      List<Question>? questions) async {
+  Future<bool> updateQuiz(String quizId, Quiz quiz) async {
     try {
-      // Ana quiz verisini güncelle
-      await _db.collection('quizzes').doc(quizId).update({
-        ...data,
-        'updatedAt': FieldValue.serverTimestamp(),
-      });
-
-      // Eğer sorular da güncellenmişse
-      if (questions != null) {
-        // Önce tüm mevcut soruları sil
-        final questionsSnapshot = await _db
-            .collection('quizzes')
-            .doc(quizId)
-            .collection('questions')
-            .get();
-
-        final batch = _db.batch();
-        for (var doc in questionsSnapshot.docs) {
-          batch.delete(doc.reference);
-        }
-        await batch.commit();
-
-        // Yeni soruları ekle
-        for (var question in questions) {
-          await _db
-              .collection('quizzes')
-              .doc(quizId)
-              .collection('questions')
-              .add({
-            'text': question.text,
-            'type': question.type.toString().split('.').last,
-            'explanation': question.explanation,
-            'points': question.points,
-            'answers': question.answers
-                .map((answer) => {
-                      'text': answer.text,
-                      'isCorrect': answer.isCorrect,
-                    })
-                .toList(),
-          });
-        }
-      }
-
+      await _db.collection('quizzes').doc(quizId).update(quiz.toMap());
       return true;
     } catch (e) {
       print('Quiz güncellenemedi: $e');
@@ -328,22 +268,7 @@ class AdminService {
   // Quiz sil
   Future<bool> deleteQuiz(String quizId) async {
     try {
-      // Önce soruları sil
-      final questionsSnapshot = await _db
-          .collection('quizzes')
-          .doc(quizId)
-          .collection('questions')
-          .get();
-
-      final batch = _db.batch();
-      for (var doc in questionsSnapshot.docs) {
-        batch.delete(doc.reference);
-      }
-
-      // Quizi sil
-      batch.delete(_db.collection('quizzes').doc(quizId));
-      await batch.commit();
-
+      await _db.collection('quizzes').doc(quizId).delete();
       return true;
     } catch (e) {
       print('Quiz silinemedi: $e');
@@ -351,32 +276,24 @@ class AdminService {
     }
   }
 
+  // Tüm quizleri getir
+  Future<List<Quiz>> getAllQuizzes() async {
+    try {
+      final snapshot = await _db.collection('quizzes').get();
+      return snapshot.docs
+          .map((doc) => Quiz.fromMap(doc.data(), doc.id))
+          .toList();
+    } catch (e) {
+      print('Quizler getirilemedi: $e');
+      return [];
+    }
+  }
+
+  // Simulation CRUD Operations
   // Simülasyon ekle
   Future<bool> addSimulation(Simulation simulation) async {
     try {
-      final docRef = await _db.collection('simulations').add({
-        'title': simulation.title,
-        'description': simulation.description,
-        'type': simulation.type.toString().split('.').last,
-        'difficultyLevel': simulation.difficultyLevel,
-        'imageUrl': simulation.imageUrl,
-        'parameters': simulation.parameters,
-        'createdAt': FieldValue.serverTimestamp(),
-        'updatedAt': FieldValue.serverTimestamp(),
-      });
-
-      // Simülasyon adımlarını ekle
-      for (var step in simulation.steps) {
-        await docRef.collection('steps').add({
-          'title': step.title,
-          'description': step.description,
-          'commands': step.commands,
-          'expectedOutput': step.expectedOutput,
-          'imageUrl': step.imageUrl,
-          'order': step.id, // Sıralama için id kullanıyoruz
-        });
-      }
-
+      await _db.collection('simulations').add(simulation.toMap());
       return true;
     } catch (e) {
       print('Simülasyon eklenemedi: $e');
@@ -385,47 +302,13 @@ class AdminService {
   }
 
   // Simülasyon güncelle
-  Future<bool> updateSimulation(String simulationId, Map<String, dynamic> data,
-      List<SimulationStep>? steps) async {
+  Future<bool> updateSimulation(
+      String simulationId, Simulation simulation) async {
     try {
-      // Ana simülasyon verisini güncelle
-      await _db.collection('simulations').doc(simulationId).update({
-        ...data,
-        'updatedAt': FieldValue.serverTimestamp(),
-      });
-
-      // Adımlar da güncellenmişse
-      if (steps != null) {
-        // Önce mevcut adımları sil
-        final stepsSnapshot = await _db
-            .collection('simulations')
-            .doc(simulationId)
-            .collection('steps')
-            .get();
-
-        final batch = _db.batch();
-        for (var doc in stepsSnapshot.docs) {
-          batch.delete(doc.reference);
-        }
-        await batch.commit();
-
-        // Yeni adımları ekle
-        for (var step in steps) {
-          await _db
-              .collection('simulations')
-              .doc(simulationId)
-              .collection('steps')
-              .add({
-            'title': step.title,
-            'description': step.description,
-            'commands': step.commands,
-            'expectedOutput': step.expectedOutput,
-            'imageUrl': step.imageUrl,
-            'order': step.id,
-          });
-        }
-      }
-
+      await _db
+          .collection('simulations')
+          .doc(simulationId)
+          .update(simulation.toMap());
       return true;
     } catch (e) {
       print('Simülasyon güncellenemedi: $e');
@@ -436,26 +319,121 @@ class AdminService {
   // Simülasyon sil
   Future<bool> deleteSimulation(String simulationId) async {
     try {
-      // Önce adımları sil
-      final stepsSnapshot = await _db
-          .collection('simulations')
-          .doc(simulationId)
-          .collection('steps')
-          .get();
-
-      final batch = _db.batch();
-      for (var doc in stepsSnapshot.docs) {
-        batch.delete(doc.reference);
-      }
-
-      // Simülasyonu sil
-      batch.delete(_db.collection('simulations').doc(simulationId));
-      await batch.commit();
-
+      await _db.collection('simulations').doc(simulationId).delete();
       return true;
     } catch (e) {
       print('Simülasyon silinemedi: $e');
       return false;
+    }
+  }
+
+  // Tüm simülasyonları getir
+  Future<List<Simulation>> getAllSimulations() async {
+    try {
+      final snapshot = await _db.collection('simulations').get();
+      return snapshot.docs
+          .map((doc) => Simulation.fromMap(doc.data(), doc.id))
+          .toList();
+    } catch (e) {
+      print('Simülasyonlar getirilemedi: $e');
+      return [];
+    }
+  }
+
+  // Training CRUD Operations
+  // Eğitim ekle
+  Future<bool> addTraining(Training training) async {
+    try {
+      await _db.collection('trainings').add(training.toMap());
+      return true;
+    } catch (e) {
+      print('Eğitim eklenemedi: $e');
+      return false;
+    }
+  }
+
+  // Eğitim güncelle
+  Future<bool> updateTraining(String trainingId, Training training) async {
+    try {
+      await _db
+          .collection('trainings')
+          .doc(trainingId)
+          .update(training.toMap());
+      return true;
+    } catch (e) {
+      print('Eğitim güncellenemedi: $e');
+      return false;
+    }
+  }
+
+  // Eğitim sil
+  Future<bool> deleteTraining(String trainingId) async {
+    try {
+      await _db.collection('trainings').doc(trainingId).delete();
+      return true;
+    } catch (e) {
+      print('Eğitim silinemedi: $e');
+      return false;
+    }
+  }
+
+  // Tüm eğitimleri getir
+  Future<List<Training>> getAllTrainings() async {
+    try {
+      final snapshot = await _db.collection('trainings').get();
+      return snapshot.docs
+          .map((doc) => Training.fromMap(doc.data(), doc.id))
+          .toList();
+    } catch (e) {
+      print('Eğitimler getirilemedi: $e');
+      return [];
+    }
+  }
+
+  // Roadmap CRUD Operations
+  // Yol haritası ekle
+  Future<bool> addRoadmap(Roadmap roadmap) async {
+    try {
+      await _db.collection('roadmaps').add(roadmap.toMap());
+      return true;
+    } catch (e) {
+      print('Yol haritası eklenemedi: $e');
+      return false;
+    }
+  }
+
+  // Yol haritası güncelle
+  Future<bool> updateRoadmap(String roadmapId, Roadmap roadmap) async {
+    try {
+      await _db.collection('roadmaps').doc(roadmapId).update(roadmap.toMap());
+      return true;
+    } catch (e) {
+      print('Yol haritası güncellenemedi: $e');
+      return false;
+    }
+  }
+
+  // Yol haritası sil
+  Future<bool> deleteRoadmap(String roadmapId) async {
+    try {
+      await _db.collection('roadmaps').doc(roadmapId).delete();
+      return true;
+    } catch (e) {
+      print('Yol haritası silinemedi: $e');
+      return false;
+    }
+  }
+
+  // Tüm yol haritalarını getir
+  Future<List<Roadmap>> getAllRoadmaps() async {
+    try {
+      final snapshot = await _db.collection('roadmaps').get();
+      return snapshot.docs
+          .map((doc) => Roadmap.fromMap(doc.data(), doc.id))
+          .toList();
+    } catch (e) {
+      print('Yol haritaları getirilemedi: $e');
+      return [];
     }
   }
 
@@ -521,269 +499,6 @@ class AdminService {
       return true;
     } catch (e) {
       print('Kullanıcı durumu değiştirilemedi: $e');
-      return false;
-    }
-  }
-
-  // Eğitim ekle/güncelle/sil işlemleri
-  Future<bool> addTraining(Training training) async {
-    try {
-      final trainingData = {
-        'title': training.title,
-        'description': training.description,
-        'imageUrl': training.imageUrl,
-        'instructor': training.instructor,
-        'durationHours': training.durationHours,
-        'level': training.level.toString().split('.').last,
-        'skills': training.skills,
-        'createdAt': FieldValue.serverTimestamp(),
-        'updatedAt': FieldValue.serverTimestamp(),
-      };
-
-      final docRef = await _db.collection('trainings').add(trainingData);
-
-      // İçerikleri ekle
-      for (var content in training.contents) {
-        await docRef.collection('contents').add({
-          'title': content.title,
-          'description': content.description,
-          'type': content.type.toString().split('.').last,
-          'durationMinutes': content.durationMinutes,
-          'resourceUrl': content.resourceUrl,
-        });
-      }
-
-      return true;
-    } catch (e) {
-      print('Eğitim eklenemedi: $e');
-      return false;
-    }
-  }
-
-  // Eğitim güncelle
-  Future<bool> updateTraining(String trainingId, Map<String, dynamic> data,
-      List<TrainingContent>? contents) async {
-    try {
-      // Ana eğitim verisini güncelle
-      await _db.collection('trainings').doc(trainingId).update({
-        ...data,
-        'updatedAt': FieldValue.serverTimestamp(),
-      });
-
-      // İçerikler de güncellenmişse
-      if (contents != null) {
-        // Önce mevcut içerikleri sil
-        final contentsSnapshot = await _db
-            .collection('trainings')
-            .doc(trainingId)
-            .collection('contents')
-            .get();
-
-        final batch = _db.batch();
-        for (var doc in contentsSnapshot.docs) {
-          batch.delete(doc.reference);
-        }
-        await batch.commit();
-
-        // Yeni içerikleri ekle
-        for (var content in contents) {
-          await _db
-              .collection('trainings')
-              .doc(trainingId)
-              .collection('contents')
-              .add({
-            'title': content.title,
-            'description': content.description,
-            'type': content.type.toString().split('.').last,
-            'durationMinutes': content.durationMinutes,
-            'resourceUrl': content.resourceUrl,
-          });
-        }
-      }
-
-      return true;
-    } catch (e) {
-      print('Eğitim güncellenemedi: $e');
-      return false;
-    }
-  }
-
-  // Eğitim sil
-  Future<bool> deleteTraining(String trainingId) async {
-    try {
-      // Önce içerikleri sil
-      final contentsSnapshot = await _db
-          .collection('trainings')
-          .doc(trainingId)
-          .collection('contents')
-          .get();
-
-      final batch = _db.batch();
-      for (var doc in contentsSnapshot.docs) {
-        batch.delete(doc.reference);
-      }
-
-      // Eğitimi sil
-      batch.delete(_db.collection('trainings').doc(trainingId));
-      await batch.commit();
-
-      return true;
-    } catch (e) {
-      print('Eğitim silinemedi: $e');
-      return false;
-    }
-  }
-
-  // Yol haritası ekle
-  Future<bool> addRoadmap(Roadmap roadmap) async {
-    try {
-      final roadmapData = {
-        'title': roadmap.title,
-        'description': roadmap.description,
-        'imageUrl': roadmap.imageUrl,
-        'category': roadmap.category,
-        'estimatedDurationWeeks': roadmap.estimatedDurationWeeks,
-        'careerPath': roadmap.careerPath.toString().split('.').last,
-        'createdAt': FieldValue.serverTimestamp(),
-        'updatedAt': FieldValue.serverTimestamp(),
-      };
-
-      final docRef = await _db.collection('roadmaps').add(roadmapData);
-
-      // Adımları ekle
-      for (var step in roadmap.steps) {
-        final stepRef = await docRef.collection('steps').add({
-          'title': step.title,
-          'description': step.description,
-          'order': step.order,
-          'requiredSkills': step.requiredSkills,
-          'relatedModuleIds': step.relatedModuleIds,
-        });
-
-        // Kaynakları ekle
-        for (var resource in step.resources) {
-          await stepRef.collection('resources').add({
-            'title': resource.title,
-            'type': resource.type.toString().split('.').last,
-            'url': resource.url,
-            'isRequired': resource.isRequired,
-          });
-        }
-      }
-
-      return true;
-    } catch (e) {
-      print('Yol haritası eklenemedi: $e');
-      return false;
-    }
-  }
-
-  // Yol haritası güncelle
-  Future<bool> updateRoadmap(String roadmapId, Map<String, dynamic> data,
-      List<RoadmapStep>? steps) async {
-    try {
-      // Ana yol haritası verisini güncelle
-      await _db.collection('roadmaps').doc(roadmapId).update({
-        ...data,
-        'updatedAt': FieldValue.serverTimestamp(),
-      });
-
-      // Adımlar da güncellenmişse
-      if (steps != null) {
-        // Önce tüm adımları sil (kaynaklar dahil)
-        final stepsSnapshot = await _db
-            .collection('roadmaps')
-            .doc(roadmapId)
-            .collection('steps')
-            .get();
-
-        // Her adım için önce kaynakları sil
-        for (var stepDoc in stepsSnapshot.docs) {
-          final resourcesSnapshot =
-              await stepDoc.reference.collection('resources').get();
-
-          final resourceBatch = _db.batch();
-          for (var resourceDoc in resourcesSnapshot.docs) {
-            resourceBatch.delete(resourceDoc.reference);
-          }
-          await resourceBatch.commit();
-        }
-
-        // Sonra adımları sil
-        final stepBatch = _db.batch();
-        for (var doc in stepsSnapshot.docs) {
-          stepBatch.delete(doc.reference);
-        }
-        await stepBatch.commit();
-
-        // Yeni adımları ekle
-        for (var step in steps) {
-          final stepRef = await _db
-              .collection('roadmaps')
-              .doc(roadmapId)
-              .collection('steps')
-              .add({
-            'title': step.title,
-            'description': step.description,
-            'order': step.order,
-            'requiredSkills': step.requiredSkills,
-            'relatedModuleIds': step.relatedModuleIds,
-          });
-
-          // Kaynakları ekle
-          for (var resource in step.resources) {
-            await stepRef.collection('resources').add({
-              'title': resource.title,
-              'type': resource.type.toString().split('.').last,
-              'url': resource.url,
-              'isRequired': resource.isRequired,
-            });
-          }
-        }
-      }
-
-      return true;
-    } catch (e) {
-      print('Yol haritası güncellenemedi: $e');
-      return false;
-    }
-  }
-
-  // Yol haritası sil
-  Future<bool> deleteRoadmap(String roadmapId) async {
-    try {
-      // Önce adımları ve kaynakları sil
-      final stepsSnapshot = await _db
-          .collection('roadmaps')
-          .doc(roadmapId)
-          .collection('steps')
-          .get();
-
-      // Her adım için kaynakları sil
-      for (var stepDoc in stepsSnapshot.docs) {
-        final resourcesSnapshot =
-            await stepDoc.reference.collection('resources').get();
-
-        final resourceBatch = _db.batch();
-        for (var resourceDoc in resourcesSnapshot.docs) {
-          resourceBatch.delete(resourceDoc.reference);
-        }
-        await resourceBatch.commit();
-      }
-
-      // Sonra adımları sil
-      final stepBatch = _db.batch();
-      for (var stepDoc in stepsSnapshot.docs) {
-        stepBatch.delete(stepDoc.reference);
-      }
-      await stepBatch.commit();
-
-      // Yol haritasını sil
-      await _db.collection('roadmaps').doc(roadmapId).delete();
-
-      return true;
-    } catch (e) {
-      print('Yol haritası silinemedi: $e');
       return false;
     }
   }

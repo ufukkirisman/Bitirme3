@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:bitirme_3/services/admin_service.dart';
-import 'package:bitirme_3/models/simulation.dart';
+import 'package:bitirme_3/models/simulation.dart' as app_sim;
 import 'package:cloud_firestore/cloud_firestore.dart';
 
 class SimulationsManagementScreen extends StatefulWidget {
@@ -33,17 +33,26 @@ class _SimulationsManagementScreenState
     try {
       final snapshot =
           await FirebaseFirestore.instance.collection('simulations').get();
-      setState(() {
-        _simulations = snapshot.docs;
-        _filteredSimulations = snapshot.docs;
-        _isLoading = false;
-      });
+
+      if (mounted) {
+        setState(() {
+          _simulations = snapshot.docs;
+          _filteredSimulations = snapshot.docs;
+          _isLoading = false;
+        });
+
+        // Sonuçları logla - Debug için
+        print('Yüklenen simülasyon sayısı: ${snapshot.docs.length}');
+        for (var doc in snapshot.docs) {
+          print('Simülasyon ID: ${doc.id}, Başlık: ${doc.data()['title']}');
+        }
+      }
     } catch (e) {
       print('Simülasyonlar yüklenirken hata: $e');
-      setState(() {
-        _isLoading = false;
-      });
       if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text('Simülasyonlar yüklenirken bir hata oluştu: $e'),
@@ -104,14 +113,7 @@ class _SimulationsManagementScreenState
         ],
       ),
       floatingActionButton: FloatingActionButton(
-        onPressed: () {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text(
-                  'Simülasyon ekleme işlevi henüz geliştirilme aşamasındadır.'),
-            ),
-          );
-        },
+        onPressed: _showAddSimulationDialog,
         backgroundColor: Colors.green,
         child: const Icon(Icons.add),
       ),
@@ -233,15 +235,9 @@ class _SimulationsManagementScreenState
                                   IconButton(
                                     icon: const Icon(Icons.edit),
                                     onPressed: () {
-                                      ScaffoldMessenger.of(context)
-                                          .showSnackBar(
-                                        const SnackBar(
-                                          content: Text(
-                                              'Simülasyon düzenleme henüz geliştirilme aşamasındadır.'),
-                                        ),
-                                      );
+                                      _showAddStepDialog(simulation.id);
                                     },
-                                    tooltip: 'Düzenle',
+                                    tooltip: 'Adım Ekle',
                                   ),
                                   // Sil butonu
                                   IconButton(
@@ -382,6 +378,347 @@ class _SimulationsManagementScreenState
                           );
                         },
                       ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showAddSimulationDialog() {
+    final titleController = TextEditingController();
+    final descriptionController = TextEditingController();
+    final imageUrlController = TextEditingController();
+    final difficultyController = TextEditingController(text: '3');
+    final moduleIdController = TextEditingController();
+    app_sim.SimulationType selectedType =
+        app_sim.SimulationType.networkAnalysis;
+
+    showDialog(
+      context: context,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setState) => AlertDialog(
+          title: const Text('Yeni Simülasyon Ekle'),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                TextField(
+                  controller: titleController,
+                  decoration: const InputDecoration(
+                    labelText: 'Başlık',
+                    hintText: 'Simülasyon başlığını girin',
+                  ),
+                ),
+                const SizedBox(height: 16),
+                TextField(
+                  controller: descriptionController,
+                  decoration: const InputDecoration(
+                    labelText: 'Açıklama',
+                    hintText: 'Simülasyon açıklamasını girin',
+                  ),
+                  maxLines: 3,
+                ),
+                const SizedBox(height: 16),
+                TextField(
+                  controller: imageUrlController,
+                  decoration: const InputDecoration(
+                    labelText: 'Görsel URL',
+                    hintText: 'Simülasyon görsel URL\'sini girin',
+                  ),
+                ),
+                const SizedBox(height: 16),
+                TextField(
+                  controller: moduleIdController,
+                  decoration: const InputDecoration(
+                    labelText: 'Modül ID (İsteğe bağlı)',
+                    hintText: 'Bağlı olduğu modül ID',
+                  ),
+                ),
+                const SizedBox(height: 16),
+                TextField(
+                  controller: difficultyController,
+                  decoration: const InputDecoration(
+                    labelText: 'Zorluk Seviyesi (1-5)',
+                    hintText: 'Zorluk seviyesi',
+                  ),
+                  keyboardType: TextInputType.number,
+                ),
+                const SizedBox(height: 16),
+                DropdownButtonFormField<app_sim.SimulationType>(
+                  value: selectedType,
+                  decoration: const InputDecoration(
+                    labelText: 'Simülasyon Türü',
+                    border: OutlineInputBorder(),
+                  ),
+                  items: app_sim.SimulationType.values.map((type) {
+                    return DropdownMenuItem<app_sim.SimulationType>(
+                      value: type,
+                      child: Text(_getSimulationTypeText(_getTypeString(type))),
+                    );
+                  }).toList(),
+                  onChanged: (newValue) {
+                    if (newValue != null) {
+                      setState(() {
+                        selectedType = newValue;
+                      });
+                    }
+                  },
+                ),
+                const SizedBox(height: 16),
+                const Text(
+                  'Not: Simülasyon oluşturduktan sonra ayrı bir ekrandan adımlar ekleyebileceksiniz.',
+                  style: TextStyle(
+                    color: Colors.grey,
+                    fontSize: 12,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('İptal'),
+            ),
+            ElevatedButton(
+              onPressed: () async {
+                if (titleController.text.trim().isEmpty) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text('Başlık boş olamaz'),
+                      backgroundColor: Colors.red,
+                    ),
+                  );
+                  return;
+                }
+
+                try {
+                  // Zorluk seviyesini 1-5 arasında sınırla
+                  int difficultyLevel =
+                      int.tryParse(difficultyController.text) ?? 3;
+                  difficultyLevel = difficultyLevel.clamp(1, 5);
+
+                  // Simülasyon verisini hazırla
+                  final simulationData = {
+                    'title': titleController.text.trim(),
+                    'description': descriptionController.text.trim(),
+                    'imageUrl': imageUrlController.text.trim(),
+                    'type': _getTypeString(selectedType),
+                    'difficultyLevel': difficultyLevel,
+                    'createdAt': FieldValue.serverTimestamp(),
+                    'updatedAt': FieldValue.serverTimestamp(),
+                  };
+
+                  // Modül ID'si varsa ekle
+                  if (moduleIdController.text.trim().isNotEmpty) {
+                    simulationData['moduleId'] = moduleIdController.text.trim();
+                  }
+
+                  // Firebase'e ekle
+                  final docRef = await FirebaseFirestore.instance
+                      .collection('simulations')
+                      .add(simulationData);
+
+                  if (mounted) {
+                    Navigator.pop(context);
+
+                    // Simülasyon ekledikten sonra listeyi hemen güncelle
+                    _loadSimulations();
+
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        content: Text(
+                            'Simülasyon başarıyla eklendi. Şimdi adımlar ekleyebilirsiniz.'),
+                        backgroundColor: Colors.green,
+                      ),
+                    );
+
+                    // Adım ekleme ekranını doğrudan aç
+                    _showAddStepDialog(docRef.id);
+                  }
+                } catch (e) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text('Simülasyon eklenirken hata oluştu: $e'),
+                      backgroundColor: Colors.red,
+                    ),
+                  );
+                }
+              },
+              child: const Text('Ekle'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  String _getTypeString(app_sim.SimulationType type) {
+    switch (type) {
+      case app_sim.SimulationType.networkAnalysis:
+        return 'networkAnalysis';
+      case app_sim.SimulationType.penetrationTesting:
+        return 'penetrationTesting';
+      case app_sim.SimulationType.forensicAnalysis:
+        return 'forensicAnalysis';
+      case app_sim.SimulationType.malwareAnalysis:
+        return 'malwareAnalysis';
+      case app_sim.SimulationType.cryptography:
+        return 'cryptography';
+      case app_sim.SimulationType.socialEngineering:
+        return 'socialEngineering';
+    }
+  }
+
+  // Simülasyona adım eklemek için form
+  void _showAddStepDialog(String simulationId) {
+    final titleController = TextEditingController();
+    final descriptionController = TextEditingController();
+    final commandsController = TextEditingController();
+    final expectedOutputController = TextEditingController();
+    final orderController = TextEditingController(text: '1');
+
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Simülasyon Adımı Ekle'),
+        content: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextField(
+                controller: titleController,
+                decoration: const InputDecoration(
+                  labelText: 'Başlık',
+                  hintText: 'Adım başlığını girin',
+                ),
+              ),
+              const SizedBox(height: 16),
+              TextField(
+                controller: descriptionController,
+                decoration: const InputDecoration(
+                  labelText: 'Açıklama',
+                  hintText: 'Adım açıklamasını girin',
+                ),
+                maxLines: 3,
+              ),
+              const SizedBox(height: 16),
+              TextField(
+                controller: commandsController,
+                decoration: const InputDecoration(
+                  labelText: 'Komutlar (virgülle ayırın)',
+                  hintText: 'Örn: git clone, cd project',
+                ),
+                maxLines: 2,
+              ),
+              const SizedBox(height: 16),
+              TextField(
+                controller: expectedOutputController,
+                decoration: const InputDecoration(
+                  labelText: 'Beklenen Çıktı',
+                  hintText: 'Komutların beklenen çıktısını girin',
+                ),
+                maxLines: 3,
+              ),
+              const SizedBox(height: 16),
+              TextField(
+                controller: orderController,
+                decoration: const InputDecoration(
+                  labelText: 'Sıra',
+                  hintText: 'Adım sırası',
+                ),
+                keyboardType: TextInputType.number,
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('İptal'),
+          ),
+          ElevatedButton(
+            onPressed: () async {
+              if (titleController.text.trim().isEmpty) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                    content: Text('Başlık boş olamaz'),
+                    backgroundColor: Colors.red,
+                  ),
+                );
+                return;
+              }
+
+              try {
+                // Komutları virgülle ayırıp liste haline getir
+                List<String> commands = [];
+                if (commandsController.text.isNotEmpty) {
+                  commands = commandsController.text
+                      .split(',')
+                      .map((c) => c.trim())
+                      .where((c) => c.isNotEmpty)
+                      .toList();
+                }
+
+                // Adım verisini hazırla
+                final stepData = {
+                  'title': titleController.text.trim(),
+                  'description': descriptionController.text.trim(),
+                  'commands': commands,
+                  'expectedOutput': expectedOutputController.text.trim(),
+                  'order': int.tryParse(orderController.text) ?? 1,
+                  'createdAt': FieldValue.serverTimestamp(),
+                  'updatedAt': FieldValue.serverTimestamp(),
+                };
+
+                // Firebase'e ekle
+                await FirebaseFirestore.instance
+                    .collection('simulations')
+                    .doc(simulationId)
+                    .collection('steps')
+                    .add(stepData);
+
+                if (mounted) {
+                  Navigator.pop(context);
+
+                  // Adım ekledikten sonra listeyi güncelle
+                  _loadSimulations();
+
+                  // Başarı mesajı göster ve başka adım eklemek isteyip istemediğini sor
+                  final addAnother = await showDialog<bool>(
+                    context: context,
+                    builder: (context) => AlertDialog(
+                      title: const Text('Adım Eklendi'),
+                      content:
+                          const Text('Başka bir adım eklemek ister misiniz?'),
+                      actions: [
+                        TextButton(
+                          onPressed: () => Navigator.pop(context, false),
+                          child: const Text('Hayır'),
+                        ),
+                        ElevatedButton(
+                          onPressed: () => Navigator.pop(context, true),
+                          child: const Text('Evet'),
+                        ),
+                      ],
+                    ),
+                  );
+
+                  // Eğer başka adım eklemek istiyorsa formu tekrar aç
+                  if (addAnother == true) {
+                    _showAddStepDialog(simulationId);
+                  }
+                }
+              } catch (e) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: Text('Adım eklenirken hata oluştu: $e'),
+                    backgroundColor: Colors.red,
+                  ),
+                );
+              }
+            },
+            child: const Text('Ekle'),
           ),
         ],
       ),

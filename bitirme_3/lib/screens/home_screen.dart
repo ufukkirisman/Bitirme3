@@ -4,6 +4,8 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:bitirme_3/screens/modules_screen.dart';
 import 'package:bitirme_3/screens/training_screen.dart';
 import 'package:bitirme_3/screens/roadmap_screen.dart';
+import 'package:bitirme_3/screens/quizzes_list_screen.dart';
+import 'package:bitirme_3/screens/simulations_list_screen.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({Key? key}) : super(key: key);
@@ -40,21 +42,22 @@ class _HomeScreenState extends State<HomeScreen>
           // Hoş geldin banner'ı
           Container(
             width: double.infinity,
-            padding: const EdgeInsets.symmetric(vertical: 20, horizontal: 16),
-            decoration: BoxDecoration(
+            padding: const EdgeInsets.symmetric(vertical: 24, horizontal: 20),
+            decoration: const BoxDecoration(
               gradient: LinearGradient(
                 colors: [
-                  Colors.blue.shade700,
-                  Colors.blue.shade500,
+                  Color(0xFF0F1923),
+                  Color(0xFF162435),
+                  Color(0xFF1C2D40),
                 ],
                 begin: Alignment.topCenter,
                 end: Alignment.bottomCenter,
               ),
               boxShadow: [
                 BoxShadow(
-                  color: Colors.black.withOpacity(0.1),
-                  blurRadius: 10,
-                  offset: const Offset(0, 5),
+                  color: Colors.black26,
+                  blurRadius: 15,
+                  offset: Offset(0, 5),
                 ),
               ],
             ),
@@ -73,15 +76,24 @@ class _HomeScreenState extends State<HomeScreen>
                             'Hoş Geldiniz,',
                             style: GoogleFonts.poppins(
                               fontSize: 18,
-                              color: Colors.white.withOpacity(0.9),
+                              color: Colors.white.withOpacity(0.7),
+                              letterSpacing: 0.5,
                             ),
                           ),
                           Text(
                             userName,
                             style: GoogleFonts.poppins(
-                              fontSize: 28,
+                              fontSize: 30,
                               fontWeight: FontWeight.bold,
                               color: Colors.white,
+                              letterSpacing: 0.5,
+                              shadows: [
+                                Shadow(
+                                  color:
+                                      const Color(0xFF00CCFF).withOpacity(0.3),
+                                  blurRadius: 5,
+                                ),
+                              ],
                             ),
                           ),
                         ],
@@ -89,75 +101,124 @@ class _HomeScreenState extends State<HomeScreen>
                       Row(
                         children: [
                           // Admin paneli butonu
-                          IconButton(
-                            icon: const Icon(Icons.admin_panel_settings,
-                                color: Colors.white),
-                            onPressed: () {
-                              Navigator.pushNamed(context, '/admin/login');
-                            },
-                            tooltip: 'Admin Paneli',
+                          Container(
+                            decoration: BoxDecoration(
+                              color: Colors.black12,
+                              borderRadius: BorderRadius.circular(10),
+                            ),
+                            child: IconButton(
+                              icon: const Icon(Icons.admin_panel_settings,
+                                  color: Color(0xFF00CCFF), size: 28),
+                              onPressed: () {
+                                Navigator.pushNamed(context, '/admin/login');
+                              },
+                              tooltip: 'Admin Paneli',
+                            ),
                           ),
+                          const SizedBox(width: 12),
                           // Çıkış butonu
-                          IconButton(
-                            icon: const Icon(Icons.exit_to_app,
-                                color: Colors.white),
-                            onPressed: () async {
-                              await _authService.signOut();
-                              if (mounted) {
-                                Navigator.pushReplacementNamed(
-                                    context, '/login');
-                              }
-                            },
+                          Container(
+                            decoration: BoxDecoration(
+                              color: Colors.black12,
+                              borderRadius: BorderRadius.circular(10),
+                            ),
+                            child: IconButton(
+                              icon: const Icon(Icons.exit_to_app,
+                                  color: Color(0xFFFF5252), size: 28),
+                              onPressed: () async {
+                                await _authService.signOut();
+                                if (mounted) {
+                                  Navigator.pushReplacementNamed(
+                                      context, '/login');
+                                }
+                              },
+                            ),
                           ),
                         ],
                       ),
                     ],
                   ),
-                  const SizedBox(height: 5),
-                  Text(
-                    'Siber güvenlik eğitimlerinize devam edin',
-                    style: GoogleFonts.poppins(
-                      fontSize: 14,
-                      color: Colors.white.withOpacity(0.9),
+                  const SizedBox(height: 8),
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 6,
+                    ),
+                    decoration: BoxDecoration(
+                      color: Colors.black12,
+                      borderRadius: BorderRadius.circular(20),
+                      border: Border.all(
+                        color: const Color(0xFF00FF8F).withOpacity(0.3),
+                        width: 1,
+                      ),
+                    ),
+                    child: Text(
+                      'Siber güvenlik eğitimlerinize devam edin',
+                      style: GoogleFonts.poppins(
+                        fontSize: 14,
+                        color: const Color(0xFF00FF8F),
+                        fontWeight: FontWeight.w500,
+                      ),
                     ),
                   ),
-                  const SizedBox(height: 20),
+                  const SizedBox(height: 24),
 
                   // Tab Bar
-                  TabBar(
-                    controller: _tabController,
-                    indicatorColor: Colors.white,
-                    indicatorWeight: 3,
-                    labelColor: Colors.white,
-                    unselectedLabelColor: Colors.white.withOpacity(0.7),
-                    isScrollable: true,
-                    tabs: [
-                      Tab(
-                        icon: const Icon(Icons.school),
-                        text: 'Modüller',
-                        iconMargin: const EdgeInsets.only(bottom: 4),
+                  Container(
+                    height: 72,
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF101823),
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(
+                        color: const Color(0xFF1C2D40),
+                        width: 1,
                       ),
-                      Tab(
-                        icon: const Icon(Icons.quiz),
-                        text: 'Quizler',
-                        iconMargin: const EdgeInsets.only(bottom: 4),
+                    ),
+                    child: TabBar(
+                      controller: _tabController,
+                      indicatorColor: const Color(0xFF00CCFF),
+                      indicatorWeight: 3,
+                      labelColor: const Color(0xFF00CCFF),
+                      unselectedLabelColor: Colors.white.withOpacity(0.6),
+                      labelStyle: GoogleFonts.poppins(
+                        fontWeight: FontWeight.bold,
+                        fontSize: 13,
                       ),
-                      Tab(
-                        icon: const Icon(Icons.computer),
-                        text: 'Simülasyonlar',
-                        iconMargin: const EdgeInsets.only(bottom: 4),
+                      unselectedLabelStyle: GoogleFonts.poppins(
+                        fontWeight: FontWeight.w500,
+                        fontSize: 13,
                       ),
-                      Tab(
-                        icon: const Icon(Icons.book),
-                        text: 'Eğitimler',
-                        iconMargin: const EdgeInsets.only(bottom: 4),
-                      ),
-                      Tab(
-                        icon: const Icon(Icons.map),
-                        text: 'Yol Haritası',
-                        iconMargin: const EdgeInsets.only(bottom: 4),
-                      ),
-                    ],
+                      indicatorSize: TabBarIndicatorSize.label,
+                      labelPadding: const EdgeInsets.symmetric(horizontal: 16),
+                      padding: const EdgeInsets.symmetric(horizontal: 0),
+                      tabs: [
+                        Tab(
+                          icon: const Icon(Icons.school),
+                          text: 'Modüller',
+                          iconMargin: const EdgeInsets.only(bottom: 4),
+                        ),
+                        Tab(
+                          icon: const Icon(Icons.quiz),
+                          text: 'Quizler',
+                          iconMargin: const EdgeInsets.only(bottom: 4),
+                        ),
+                        Tab(
+                          icon: const Icon(Icons.computer),
+                          text: 'Simülasyonlar',
+                          iconMargin: const EdgeInsets.only(bottom: 4),
+                        ),
+                        Tab(
+                          icon: const Icon(Icons.book),
+                          text: 'Eğitimler',
+                          iconMargin: const EdgeInsets.only(bottom: 4),
+                        ),
+                        Tab(
+                          icon: const Icon(Icons.map),
+                          text: 'Yol Haritası',
+                          iconMargin: const EdgeInsets.only(bottom: 4),
+                        ),
+                      ],
+                    ),
                   ),
                 ],
               ),
@@ -166,24 +227,28 @@ class _HomeScreenState extends State<HomeScreen>
 
           // Tab View
           Expanded(
-            child: TabBarView(
-              controller: _tabController,
-              children: [
-                // Modüller sekmesi
-                const ModulesTabView(),
+            child: Container(
+              color: const Color(
+                  0xFF0A121B), // Arka plan rengini daha koyu bir tona ayarla
+              child: TabBarView(
+                controller: _tabController,
+                children: [
+                  // Modüller sekmesi
+                  const ModulesTabView(),
 
-                // Quizler sekmesi
-                QuizesTabView(),
+                  // Quizler sekmesi
+                  QuizesTabView(),
 
-                // Simülasyonlar sekmesi
-                SimulationsTabView(),
+                  // Simülasyonlar sekmesi
+                  SimulationsTabView(),
 
-                // Eğitimler sekmesi
-                TrainingsTabView(),
+                  // Eğitimler sekmesi
+                  TrainingsTabView(),
 
-                // Yol Haritası sekmesi
-                RoadmapsTabView(),
-              ],
+                  // Yol Haritası sekmesi
+                  RoadmapsTabView(),
+                ],
+              ),
             ),
           ),
         ],
@@ -206,49 +271,7 @@ class ModulesTabView extends StatelessWidget {
 class QuizesTabView extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
-    return Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          const Icon(
-            Icons.quiz,
-            size: 80,
-            color: Colors.orange,
-          ),
-          const SizedBox(height: 16),
-          Text(
-            'Quizleriniz',
-            style: GoogleFonts.poppins(
-              fontSize: 24,
-              fontWeight: FontWeight.bold,
-            ),
-          ),
-          const SizedBox(height: 8),
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 32.0),
-            child: Text(
-              'Yakında bu bölümde tamamlamanız gereken quizler ve sınavlar listelenecek.',
-              textAlign: TextAlign.center,
-              style: GoogleFonts.poppins(
-                fontSize: 16,
-                color: Colors.grey.shade600,
-              ),
-            ),
-          ),
-          const SizedBox(height: 24),
-          OutlinedButton.icon(
-            onPressed: () {
-              Navigator.pushNamed(context, '/modules');
-            },
-            icon: const Icon(Icons.school),
-            label: const Text('Modüllere Git'),
-            style: OutlinedButton.styleFrom(
-              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
-            ),
-          ),
-        ],
-      ),
-    );
+    return const QuizzesListScreen();
   }
 }
 
@@ -256,49 +279,7 @@ class QuizesTabView extends StatelessWidget {
 class SimulationsTabView extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
-    return Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          const Icon(
-            Icons.computer,
-            size: 80,
-            color: Colors.purple,
-          ),
-          const SizedBox(height: 16),
-          Text(
-            'Simülasyonlar',
-            style: GoogleFonts.poppins(
-              fontSize: 24,
-              fontWeight: FontWeight.bold,
-            ),
-          ),
-          const SizedBox(height: 8),
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 32.0),
-            child: Text(
-              'Siber güvenlik becerilerinizi pratik yaparak geliştirin. Simülasyonlar yakında burada olacak.',
-              textAlign: TextAlign.center,
-              style: GoogleFonts.poppins(
-                fontSize: 16,
-                color: Colors.grey.shade600,
-              ),
-            ),
-          ),
-          const SizedBox(height: 24),
-          OutlinedButton.icon(
-            onPressed: () {
-              Navigator.pushNamed(context, '/modules');
-            },
-            icon: const Icon(Icons.school),
-            label: const Text('Modüllere Git'),
-            style: OutlinedButton.styleFrom(
-              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
-            ),
-          ),
-        ],
-      ),
-    );
+    return const SimulationsListScreen();
   }
 }
 

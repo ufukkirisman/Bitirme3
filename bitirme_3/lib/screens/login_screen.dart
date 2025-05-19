@@ -71,17 +71,45 @@ class _LoginScreenState extends State<LoginScreen> {
     await _authService.sendPasswordResetEmail(_emailController.text.trim());
   }
 
+  void _goToAdminLogin() {
+    Navigator.pushNamed(context, '/admin/login');
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      extendBodyBehindAppBar: true,
+      appBar: AppBar(
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+        actions: [
+          TextButton.icon(
+            onPressed: _goToAdminLogin,
+            icon: const Icon(Icons.admin_panel_settings, color: Colors.white),
+            label: const Text(
+              'Admin Girişi',
+              style: TextStyle(
+                color: Colors.white,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+            style: TextButton.styleFrom(
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+            ),
+          ),
+        ],
+      ),
       body: Container(
-        decoration: BoxDecoration(
+        width: double.infinity,
+        height: double.infinity,
+        decoration: const BoxDecoration(
           gradient: LinearGradient(
             begin: Alignment.topLeft,
             end: Alignment.bottomRight,
             colors: [
-              Colors.blue.shade800,
-              Colors.blue.shade500,
+              Color(0xFF0F1923),
+              Color(0xFF162435),
+              Color(0xFF1C2D40),
             ],
           ),
         ),
@@ -94,21 +122,48 @@ class _LoginScreenState extends State<LoginScreen> {
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
                   // Logo
-                  Icon(
-                    Icons.security,
-                    size: 80,
-                    color: Colors.white,
+                  Container(
+                    width: 120,
+                    height: 120,
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF101823),
+                      shape: BoxShape.circle,
+                      boxShadow: [
+                        BoxShadow(
+                          color: const Color(0xFF00CCFF).withOpacity(0.2),
+                          blurRadius: 20,
+                          spreadRadius: 2,
+                        ),
+                      ],
+                      border: Border.all(
+                        color: const Color(0xFF00CCFF),
+                        width: 2,
+                      ),
+                    ),
+                    child: const Icon(
+                      Icons.security,
+                      size: 64,
+                      color: Color(0xFF00CCFF),
+                    ),
                   ),
-                  const SizedBox(height: 20),
+                  const SizedBox(height: 24),
 
                   // Başlık
                   Text(
                     'SiberEğitim',
                     textAlign: TextAlign.center,
                     style: GoogleFonts.poppins(
-                      fontSize: 32,
+                      fontSize: 36,
                       fontWeight: FontWeight.bold,
                       color: Colors.white,
+                      letterSpacing: 1.2,
+                      shadows: [
+                        Shadow(
+                          color: const Color(0xFF00CCFF).withOpacity(0.5),
+                          blurRadius: 10,
+                        ),
+                      ],
                     ),
                   ),
                   Text(
@@ -116,24 +171,29 @@ class _LoginScreenState extends State<LoginScreen> {
                     textAlign: TextAlign.center,
                     style: GoogleFonts.poppins(
                       fontSize: 16,
-                      color: Colors.white.withOpacity(0.9),
+                      color: Colors.white.withOpacity(0.7),
+                      letterSpacing: 0.5,
                     ),
                   ),
                   const SizedBox(height: 40),
 
                   // Form
                   Container(
-                    padding: const EdgeInsets.all(20),
+                    padding: const EdgeInsets.all(24),
                     decoration: BoxDecoration(
-                      color: Colors.white,
-                      borderRadius: BorderRadius.circular(12),
+                      color: const Color(0xFF101823),
+                      borderRadius: BorderRadius.circular(16),
                       boxShadow: [
                         BoxShadow(
-                          color: Colors.black.withOpacity(0.1),
-                          blurRadius: 10,
-                          spreadRadius: 5,
+                          color: Colors.black.withOpacity(0.3),
+                          blurRadius: 15,
+                          spreadRadius: 2,
                         ),
                       ],
+                      border: Border.all(
+                        color: const Color(0xFF1C2D40),
+                        width: 1.5,
+                      ),
                     ),
                     child: Form(
                       key: _formKey,
@@ -143,19 +203,20 @@ class _LoginScreenState extends State<LoginScreen> {
                           Text(
                             'Giriş Yap',
                             style: GoogleFonts.poppins(
-                              fontSize: 24,
+                              fontSize: 26,
                               fontWeight: FontWeight.bold,
-                              color: Colors.blue.shade800,
+                              color: Colors.white,
+                              letterSpacing: 0.5,
                             ),
                           ),
-                          const SizedBox(height: 20),
+                          const SizedBox(height: 24),
 
                           // E-posta alanı
                           TextFormField(
                             controller: _emailController,
                             keyboardType: TextInputType.emailAddress,
-                            style: TextStyle(
-                              color: Colors.black87,
+                            style: const TextStyle(
+                              color: Colors.white,
                               fontSize: 16,
                             ),
                             decoration: AppInputDecoration.authInputDecoration(
@@ -174,14 +235,14 @@ class _LoginScreenState extends State<LoginScreen> {
                               return null;
                             },
                           ),
-                          const SizedBox(height: 16),
+                          const SizedBox(height: 20),
 
                           // Şifre alanı
                           TextFormField(
                             controller: _passwordController,
                             obscureText: _obscurePassword,
-                            style: TextStyle(
-                              color: Colors.black87,
+                            style: const TextStyle(
+                              color: Colors.white,
                               fontSize: 16,
                             ),
                             decoration: AppInputDecoration.authInputDecoration(
@@ -194,7 +255,7 @@ class _LoginScreenState extends State<LoginScreen> {
                                   _obscurePassword
                                       ? Icons.visibility
                                       : Icons.visibility_off,
-                                  color: Colors.blue.shade800,
+                                  color: const Color(0xFF00CCFF),
                                 ),
                                 onPressed: () {
                                   setState(() {
@@ -216,16 +277,21 @@ class _LoginScreenState extends State<LoginScreen> {
                             alignment: Alignment.centerRight,
                             child: TextButton(
                               onPressed: _resetPassword,
-                              child: Text(
+                              style: TextButton.styleFrom(
+                                padding:
+                                    const EdgeInsets.symmetric(vertical: 8),
+                              ),
+                              child: const Text(
                                 'Şifremi Unuttum',
                                 style: TextStyle(
-                                  color: Colors.blue.shade800,
+                                  color: Color(0xFF00CCFF),
+                                  fontWeight: FontWeight.w500,
                                 ),
                               ),
                             ),
                           ),
 
-                          const SizedBox(height: 8),
+                          const SizedBox(height: 24),
 
                           // Giriş butonu
                           AppButton(
@@ -234,7 +300,7 @@ class _LoginScreenState extends State<LoginScreen> {
                             isLoading: _isLoading,
                           ),
 
-                          const SizedBox(height: 16),
+                          const SizedBox(height: 24),
 
                           // Kayıt ol yönlendirme
                           Row(
@@ -242,15 +308,16 @@ class _LoginScreenState extends State<LoginScreen> {
                             children: [
                               Text(
                                 'Hesabınız yok mu?',
-                                style: TextStyle(color: Colors.grey.shade700),
+                                style: TextStyle(color: Colors.grey.shade400),
                               ),
                               TextButton(
                                 onPressed: _goToRegister,
-                                child: Text(
+                                child: const Text(
                                   'Kayıt Ol',
                                   style: TextStyle(
                                     fontWeight: FontWeight.bold,
-                                    color: Colors.blue.shade800,
+                                    color: Color(0xFF00FF8F),
+                                    fontSize: 16,
                                   ),
                                 ),
                               ),

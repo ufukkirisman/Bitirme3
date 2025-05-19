@@ -8,36 +8,36 @@ class AppInputDecoration {
   }) {
     return InputDecoration(
       prefixIcon: prefixIcon != null
-          ? Icon(prefixIcon, color: Colors.blue.shade800)
+          ? Icon(prefixIcon, color: const Color(0xFF00CCFF))
           : null,
       hintText: hintText,
       hintStyle: TextStyle(color: Colors.grey.shade500),
       labelText: labelText,
-      labelStyle:
-          TextStyle(color: Colors.blue.shade800, fontWeight: FontWeight.w500),
-      floatingLabelStyle:
-          TextStyle(color: Colors.blue.shade800, fontWeight: FontWeight.bold),
-      fillColor: Colors.white,
+      labelStyle: const TextStyle(
+          color: Color(0xFF00CCFF), fontWeight: FontWeight.w500),
+      floatingLabelStyle: const TextStyle(
+          color: Color(0xFF00CCFF), fontWeight: FontWeight.bold),
+      fillColor: const Color(0xFF101823),
       filled: true,
-      contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+      contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 20),
       border: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(10),
+        borderRadius: BorderRadius.circular(12),
         borderSide: const BorderSide(color: Colors.grey),
       ),
       enabledBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(10),
-        borderSide: BorderSide(color: Colors.blue.shade300, width: 1.0),
+        borderRadius: BorderRadius.circular(12),
+        borderSide: const BorderSide(color: Color(0xFF1C2D40), width: 1.0),
       ),
       focusedBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(10),
-        borderSide: BorderSide(color: Colors.blue.shade800, width: 2.0),
+        borderRadius: BorderRadius.circular(12),
+        borderSide: const BorderSide(color: Color(0xFF00CCFF), width: 2.0),
       ),
       errorBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(10),
+        borderRadius: BorderRadius.circular(12),
         borderSide: const BorderSide(color: Colors.red, width: 1.0),
       ),
       focusedErrorBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(10),
+        borderRadius: BorderRadius.circular(12),
         borderSide: const BorderSide(color: Colors.red, width: 2.0),
       ),
       errorStyle:
@@ -65,13 +65,15 @@ class AppButton extends StatelessWidget {
     return ElevatedButton(
       onPressed: isLoading ? null : onPressed,
       style: ElevatedButton.styleFrom(
-        backgroundColor: color ?? Colors.blue.shade800,
+        backgroundColor: color ?? const Color(0xFF00AACC),
         foregroundColor: Colors.white,
-        minimumSize: const Size(double.infinity, 50),
+        minimumSize: const Size(double.infinity, 56),
         shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(10),
+          borderRadius: BorderRadius.circular(12),
         ),
         elevation: 4,
+        shadowColor: const Color(0xFF008899),
+        padding: const EdgeInsets.symmetric(vertical: 12),
       ),
       child: isLoading
           ? const SizedBox(
@@ -85,8 +87,9 @@ class AppButton extends StatelessWidget {
           : Text(
               text,
               style: const TextStyle(
-                fontSize: 16,
+                fontSize: 18,
                 fontWeight: FontWeight.bold,
+                letterSpacing: 0.5,
               ),
             ),
     );
