@@ -217,12 +217,29 @@ class ModuleService {
           }
         }
 
+        // Şıkları oluştur
+        List<SimulationOption>? options;
+        if (sData['options'] != null) {
+          options = [];
+          for (var option in sData['options']) {
+            options.add(SimulationOption(
+              id: option['id'] ?? '',
+              text: option['text'] ?? '',
+              isCorrect: option['isCorrect'] ?? false,
+            ));
+          }
+        }
+
         steps.add(SimulationStep(
           id: stepDoc.id,
           title: sData['title'] ?? '',
           description: sData['description'] ?? '',
           commands: commands,
           expectedOutput: sData['expectedOutput'] ?? '',
+          expectedCommand: sData['expectedCommand'],
+          hint: sData['hint'],
+          options: options,
+          hasMultipleChoiceOptions: sData['hasMultipleChoiceOptions'] ?? false,
         ));
       }
 

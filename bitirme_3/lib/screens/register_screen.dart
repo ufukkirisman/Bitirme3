@@ -33,9 +33,11 @@ class _RegisterScreenState extends State<RegisterScreen> {
 
   Future<void> _register() async {
     if (_formKey.currentState!.validate()) {
-      setState(() {
-        _isLoading = true;
-      });
+      if (mounted) {
+        setState(() {
+          _isLoading = true;
+        });
+      }
 
       User? user = await _authService.registerWithEmailAndPassword(
         _emailController.text.trim(),
@@ -43,9 +45,11 @@ class _RegisterScreenState extends State<RegisterScreen> {
         _nameController.text.trim(),
       );
 
-      setState(() {
-        _isLoading = false;
-      });
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+      }
 
       if (user != null && mounted) {
         // Başarılı kayıt
@@ -194,9 +198,11 @@ class _RegisterScreenState extends State<RegisterScreen> {
                                   color: Colors.grey,
                                 ),
                                 onPressed: () {
-                                  setState(() {
-                                    _obscurePassword = !_obscurePassword;
-                                  });
+                                  if (mounted) {
+                                    setState(() {
+                                      _obscurePassword = !_obscurePassword;
+                                    });
+                                  }
                                 },
                               ),
                             ),
@@ -229,10 +235,12 @@ class _RegisterScreenState extends State<RegisterScreen> {
                                   color: Colors.grey,
                                 ),
                                 onPressed: () {
-                                  setState(() {
-                                    _obscureConfirmPassword =
-                                        !_obscureConfirmPassword;
-                                  });
+                                  if (mounted) {
+                                    setState(() {
+                                      _obscureConfirmPassword =
+                                          !_obscureConfirmPassword;
+                                    });
+                                  }
                                 },
                               ),
                             ),

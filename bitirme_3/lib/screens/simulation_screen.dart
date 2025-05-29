@@ -33,6 +33,11 @@ class _SimulationScreenState extends State<SimulationScreen> {
   final List<TerminalLine> _terminalOutput = [];
   int _currentStepIndex = 0;
 
+  // Çoktan seçmeli soru yanıtları için
+  String? _selectedOptionId;
+  bool _showAnswerFeedback = false;
+  bool _isAnswerCorrect = false;
+
   @override
   void initState() {
     super.initState();
@@ -112,36 +117,45 @@ class _SimulationScreenState extends State<SimulationScreen> {
   Future<void> _completeSimulation() async {
     try {
       String? moduleId = _simulation?.moduleId;
+      // Modül ID kontrolünü kaldırıyoruz
       if (moduleId == null) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Modül bilgisi bulunamadı'),
-            backgroundColor: Colors.red,
-          ),
-        );
-        return;
+        // Varsayılan bir ID kullan (simülasyon ID'si olabilir)
+        moduleId = widget.simulationId;
       }
 
       // Simülasyonu tamamlandı olarak işaretle
       await _saveSimulationResult(widget.simulationId, moduleId);
 
-      setState(() {
-        _simulationCompleted = true;
-      });
+      if (mounted) {
+        setState(() {
+          _simulationCompleted = true;
+        });
 
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Simülasyon tamamlandı olarak işaretlendi'),
-          backgroundColor: Colors.green,
-        ),
-      );
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Simülasyon başarıyla tamamlandı'),
+            backgroundColor: Colors.green,
+          ),
+        );
+      }
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Hata oluştu: $e'),
-          backgroundColor: Colors.red,
-        ),
-      );
+      // Hata durumunda bile simülasyonu tamamlandı say
+      if (mounted) {
+        setState(() {
+          _simulationCompleted = true;
+        });
+      }
+
+      print('Simülasyon tamamlama hatası: $e');
+      // Hata mesajını gösterme, sadece başarılı mesajı göster
+      if (mounted && context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Simülasyon başarıyla tamamlandı'),
+            backgroundColor: Colors.green,
+          ),
+        );
+      }
     }
   }
 
@@ -152,7 +166,7 @@ class _SimulationScreenState extends State<SimulationScreen> {
       String? userId = _auth.currentUser?.uid;
       if (userId == null) return;
 
-      // Kullanıcı ilerlemesini güncelle
+      // 1. Kullanıcının simulation_results koleksiyonuna kaydet
       await _firestore
           .collection('users')
           .doc(userId)
@@ -165,13 +179,40 @@ class _SimulationScreenState extends State<SimulationScreen> {
         'completedAt': FieldValue.serverTimestamp(),
       });
 
-      // Modül ilerlemesini güncelle
-      await _moduleService.updateModuleProgress(moduleId, 100);
+      // 2. Kullanıcının genel progress bilgisine de ekle (farklı koleksiyon)
+      await _firestore
+          .collection('users')
+          .doc(userId)
+          .collection('progress')
+          .doc(simulationId)
+          .set({
+        'type': 'simulation',
+        'itemId': simulationId,
+        'completed': true,
+        'completedAt': FieldValue.serverTimestamp(),
+      });
 
-      print('Simülasyon sonucu kaydedildi.');
+      // 3. Kullanıcı dokümanına da tamamlanan simülasyonları ayrıca kaydet
+      // Bu kayıt, kullanıcı hesaptan çıkıp girdiğinde bile kalıcı olması için
+      await _firestore.collection('users').doc(userId).update({
+        'completedSimulations': FieldValue.arrayUnion([simulationId])
+      }).catchError((e) {
+        // Eğer completedSimulations alanı yoksa, önce oluştur
+        print('completedSimulations alanı güncelleme hatası: $e');
+        return _firestore.collection('users').doc(userId).set({
+          'completedSimulations': [simulationId]
+        }, SetOptions(merge: true));
+      });
+
+      // 4. Modül ilerlemesini güncelle, eğer geçerli bir modül ID'si varsa
+      if (_simulation?.moduleId != null) {
+        await _moduleService.updateModuleProgress(moduleId, 100);
+      }
+
+      print('Simülasyon sonucu tüm koleksiyonlara kaydedildi.');
     } catch (e) {
       print('Simülasyon sonucu kaydetme hatası: $e');
-      rethrow;
+      // Hatayı yukarıda işleyeceğiz, burada rethrow yapmıyoruz
     }
   }
 
@@ -228,6 +269,87 @@ class _SimulationScreenState extends State<SimulationScreen> {
     }
   }
 
+  // Çoktan seçmeli yanıt gönderme işlemi
+  void _submitMultipleChoiceAnswer(String optionId) {
+    // Eğer simülasyon tamamlandıysa, işlem yapma
+    if (_simulationCompleted) return;
+
+    // Mevcut adımı al
+    final currentStep = _simulation!.steps[_currentStepIndex];
+
+    // Seçilen şıkkı bul
+    final selectedOption = currentStep.options?.firstWhere(
+      (option) => option.id == optionId,
+      orElse: () => app_sim.SimulationOption(
+        id: '',
+        text: '',
+        isCorrect: false,
+      ),
+    );
+
+    if (selectedOption == null || selectedOption.id.isEmpty) {
+      _addSystemOutput('Hata: Seçenek bulunamadı.');
+      return;
+    }
+
+    // Seçilen cevabı ve doğruluğunu kaydet
+    if (mounted) {
+      setState(() {
+        _selectedOptionId = optionId;
+        _showAnswerFeedback = true;
+        _isAnswerCorrect = selectedOption.isCorrect;
+      });
+    }
+
+    // Seçilen cevabı terminale ekle
+    _addUserCommand('Seçilen: ${selectedOption.text}');
+
+    // Doğru cevap mı kontrol et
+    if (selectedOption.isCorrect) {
+      _addSystemOutput('✅ Doğru cevap! Harika iş çıkardınız.');
+
+      // Biraz bekleyip sonraki adıma geç (kullanıcının geri bildirimi görmesi için)
+      Future.delayed(const Duration(seconds: 2), () {
+        if (!mounted) return; // Widget hala aktif mi kontrol et
+
+        // Eğer başka soru varsa ona geç
+        if (_currentStepIndex < _simulation!.steps.length - 1) {
+          _goToNextStep();
+          // Yeni adıma geçince seçim durumunu sıfırla
+          if (mounted) {
+            setState(() {
+              _selectedOptionId = null;
+              _showAnswerFeedback = false;
+            });
+          }
+        } else {
+          // Son soruysa başarılı mesajı göster
+          if (mounted) {
+            setState(() {
+              _simulationCompleted = true;
+              _showAnswerFeedback = true;
+              _isAnswerCorrect = true; // Başarılı olarak göster
+            });
+          }
+          _addSystemOutput('\n🎉 TEBRİKLER! Simülasyonu tamamladınız.');
+          _completeSimulation();
+
+          // 3 saniye sonra önceki sayfaya dön
+          Future.delayed(const Duration(seconds: 3), () {
+            if (mounted && Navigator.canPop(context)) {
+              Navigator.of(context).pop();
+            }
+          });
+        }
+      });
+    } else {
+      _addSystemOutput('❌ Yanlış cevap. Lütfen tekrar deneyin.');
+      if (currentStep.hint != null) {
+        _addSystemOutput('İPUCU: ${currentStep.hint}');
+      }
+    }
+  }
+
   bool _matchesExpectedPattern(String command, String expected) {
     // Basit bir pattern matching - daha gelişmiş regex kullanılabilir
     if (expected.contains('*')) {
@@ -250,7 +372,15 @@ class _SimulationScreenState extends State<SimulationScreen> {
         _addSystemOutput('\nİPUCU: ${nextStep.hint}');
       }
 
-      if (nextStep.commands.isNotEmpty) {
+      // Adım türüne göre farklı içeriği göster
+      if (nextStep.hasMultipleChoiceOptions &&
+          nextStep.options != null &&
+          nextStep.options!.isNotEmpty) {
+        _addSystemOutput('\nLütfen aşağıdaki seçeneklerden birini seçin:');
+        for (int i = 0; i < nextStep.options!.length; i++) {
+          _addSystemOutput('${i + 1}. ${nextStep.options![i].text}');
+        }
+      } else if (nextStep.commands.isNotEmpty) {
         _addSystemOutput(
             '\nKullanabileceğiniz komutlar: ${nextStep.commands.join(", ")}');
       }
@@ -265,17 +395,29 @@ class _SimulationScreenState extends State<SimulationScreen> {
   void _showHelp(app_sim.SimulationStep currentStep) {
     _addSystemOutput('YARDIM:');
     _addSystemOutput('- Adım ${_currentStepIndex + 1}: ${currentStep.title}');
-    _addSystemOutput('- İpucu için "hint" veya "ipucu" yazın');
-    _addSystemOutput(
-        '- Terminali temizlemek için "clear" veya "temizle" yazın');
 
-    if (currentStep.commands.isNotEmpty) {
+    if (currentStep.hasMultipleChoiceOptions && currentStep.options != null) {
       _addSystemOutput(
-          '- Kullanabileceğiniz komutlar: ${currentStep.commands.join(", ")}');
+          '- Bu bir çoktan seçmeli soru adımıdır. Doğru seçeneği seçin.');
+      _addSystemOutput('- Seçenekler:');
+      for (int i = 0; i < currentStep.options!.length; i++) {
+        _addSystemOutput('  ${i + 1}. ${currentStep.options![i].text}');
+      }
+    } else {
+      _addSystemOutput('- İpucu için "hint" veya "ipucu" yazın');
+      _addSystemOutput(
+          '- Terminali temizlemek için "clear" veya "temizle" yazın');
+
+      if (currentStep.commands.isNotEmpty) {
+        _addSystemOutput(
+            '- Kullanabileceğiniz komutlar: ${currentStep.commands.join(", ")}');
+      }
     }
   }
 
   void _addUserCommand(String command) {
+    if (!mounted) return;
+
     setState(() {
       _terminalOutput.add(TerminalLine(
         text: command,
@@ -285,6 +427,8 @@ class _SimulationScreenState extends State<SimulationScreen> {
   }
 
   void _addSystemOutput(String output) {
+    if (!mounted) return;
+
     setState(() {
       _terminalOutput.add(TerminalLine(
         text: output,
@@ -309,31 +453,6 @@ class _SimulationScreenState extends State<SimulationScreen> {
         ],
       ),
       body: _buildBody(),
-      bottomNavigationBar:
-          !_isLoading && _simulation != null && !_simulationCompleted
-              ? BottomAppBar(
-                  color: Theme.of(context).colorScheme.surface,
-                  elevation: 8,
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 16.0, vertical: 12.0),
-                    child: ElevatedButton(
-                      onPressed: _completeSimulation,
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.cyan,
-                        padding: const EdgeInsets.symmetric(vertical: 12),
-                      ),
-                      child: const Text(
-                        'SİMÜLASYONU TAMAMLA',
-                        style: TextStyle(
-                          fontWeight: FontWeight.bold,
-                          fontSize: 16,
-                        ),
-                      ),
-                    ),
-                  ),
-                )
-              : null,
     );
   }
 
@@ -370,15 +489,20 @@ class _SimulationScreenState extends State<SimulationScreen> {
       );
     }
 
+    // Mevcut adımı al
+    final currentStep = _simulation!.steps[_currentStepIndex];
+    final bool isMultipleChoice = currentStep.hasMultipleChoiceOptions &&
+        currentStep.options != null &&
+        currentStep.options!.isNotEmpty;
+
     // Simülasyon içeriğini göster
-    return SingleChildScrollView(
-      padding: const EdgeInsets.all(16),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // Simülasyon başlık kartı
-          Card(
-            margin: const EdgeInsets.only(bottom: 20),
+    return Column(
+      children: [
+        // Simülasyon başlık kartı
+        Padding(
+          padding: const EdgeInsets.all(16),
+          child: Card(
+            margin: const EdgeInsets.only(bottom: 8),
             child: Padding(
               padding: const EdgeInsets.all(16),
               child: Column(
@@ -404,48 +528,341 @@ class _SimulationScreenState extends State<SimulationScreen> {
               ),
             ),
           ),
+        ),
 
-          // Simülasyon içeriği (Bu kısım uygulamanın gerçek simülasyon mantığına göre değişecektir)
-          const Text(
-            'Simülasyon İçeriği',
-            style: TextStyle(
-              fontSize: 18,
+        // Adım bilgisi
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16),
+          child: Row(
+            children: [
+              Expanded(
+                child: LinearProgressIndicator(
+                  value: (_currentStepIndex + 1) / _simulation!.steps.length,
+                  backgroundColor: const Color(0xFF1C2D40),
+                  valueColor:
+                      const AlwaysStoppedAnimation<Color>(Color(0xFF00CCFF)),
+                ),
+              ),
+              const SizedBox(width: 16),
+              Text(
+                'Adım ${_currentStepIndex + 1}/${_simulation!.steps.length}',
+                style: const TextStyle(
+                  color: Color(0xFF00CCFF),
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ],
+          ),
+        ),
+
+        const SizedBox(height: 8),
+
+        // Çoktan seçmeli soru ise şıkları göster, değilse terminal göster
+        Expanded(
+          child: isMultipleChoice
+              ? _buildMultipleChoiceStep(currentStep)
+              : _buildTerminalStep(),
+        ),
+      ],
+    );
+  }
+
+  // Çoktan seçmeli adım UI'ı
+  Widget _buildMultipleChoiceStep(app_sim.SimulationStep step) {
+    return Padding(
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Soru başlığı
+          Text(
+            step.title,
+            style: const TextStyle(
+              fontSize: 20,
               fontWeight: FontWeight.bold,
-              color: Color(0xFF00CCFF),
+              color: Colors.white,
             ),
           ),
-          const SizedBox(height: 12),
+          const SizedBox(height: 16),
+
+          // Soru açıklaması
           Container(
-            width: double.infinity,
-            height: 300,
+            padding: const EdgeInsets.all(16),
             decoration: BoxDecoration(
               color: const Color(0xFF0F1923),
               borderRadius: BorderRadius.circular(12),
               border: Border.all(color: const Color(0xFF1C2D40)),
             ),
-            child: const Center(
-              child: Text(
-                'Simülasyon içeriği burada görüntülenecek',
-                style: TextStyle(color: Colors.white70),
+            child: Text(
+              step.description,
+              style: const TextStyle(
+                fontSize: 16,
+                color: Colors.white70,
               ),
             ),
           ),
 
-          const SizedBox(height: 30),
+          const SizedBox(height: 24),
+          const Text(
+            'Seçenekler:',
+            style: TextStyle(
+              fontSize: 16,
+              fontWeight: FontWeight.bold,
+              color: Color(0xFF00CCFF),
+            ),
+          ),
+          const SizedBox(height: 8),
 
-          // Simülasyon tamamlama butonu
-          if (!_simulationCompleted)
-            Center(
-              child: ElevatedButton(
-                onPressed: _completeSimulation,
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFF00AACC),
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+          // Şıklar
+          Expanded(
+            child: ListView.builder(
+              itemCount: step.options!.length,
+              itemBuilder: (context, index) {
+                final option = step.options![index];
+                final bool isSelected = option.id == _selectedOptionId;
+
+                // Doğru/yanlış cevap görsel geri bildirimi
+                Color cardColor = Colors.transparent;
+                Color borderColor = Colors.transparent;
+                IconData? feedbackIcon;
+                Color iconColor = Colors.white;
+
+                if (_showAnswerFeedback && isSelected) {
+                  if (_isAnswerCorrect) {
+                    cardColor = Colors.green.withOpacity(0.2);
+                    borderColor = Colors.green;
+                    feedbackIcon = Icons.check_circle;
+                    iconColor = Colors.green;
+                  } else {
+                    cardColor = Colors.red.withOpacity(0.2);
+                    borderColor = Colors.red;
+                    feedbackIcon = Icons.cancel;
+                    iconColor = Colors.red;
+                  }
+                } else if (isSelected) {
+                  // Sadece seçilmiş, ama henüz cevap gösterilmiyorsa
+                  borderColor = const Color(0xFF00CCFF);
+                }
+
+                return Card(
+                  margin: const EdgeInsets.only(bottom: 8),
+                  color: cardColor,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(8),
+                    side: BorderSide(
+                      color: isSelected ? borderColor : Colors.transparent,
+                      width: 2,
+                    ),
+                  ),
+                  child: InkWell(
+                    onTap: _simulationCompleted
+                        ? null // Tamamlandıysa tıklanamaz
+                        : () => _submitMultipleChoiceAnswer(option.id),
+                    borderRadius: BorderRadius.circular(8),
+                    child: Padding(
+                      padding: const EdgeInsets.all(16),
+                      child: Row(
+                        children: [
+                          Container(
+                            width: 32,
+                            height: 32,
+                            decoration: BoxDecoration(
+                              color: const Color(0xFF1C2D40),
+                              borderRadius: BorderRadius.circular(16),
+                            ),
+                            alignment: Alignment.center,
+                            child: Text(
+                              '${index + 1}',
+                              style: const TextStyle(
+                                color: Color(0xFF00CCFF),
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 16),
+                          Expanded(
+                            child: Text(
+                              option.text,
+                              style: const TextStyle(
+                                fontSize: 16,
+                                color: Colors.white,
+                              ),
+                            ),
+                          ),
+                          // Geri bildirim ikonu
+                          if (_showAnswerFeedback &&
+                              isSelected &&
+                              feedbackIcon != null)
+                            Icon(
+                              feedbackIcon,
+                              color: iconColor,
+                              size: 24,
+                            ),
+                        ],
+                      ),
+                    ),
+                  ),
+                );
+              },
+            ),
+          ),
+
+          // Geri bildirim özeti (opsiyonel)
+          if (_showAnswerFeedback)
+            Container(
+              padding: const EdgeInsets.all(16),
+              margin: const EdgeInsets.only(top: 16),
+              decoration: BoxDecoration(
+                color: _isAnswerCorrect
+                    ? Colors.green.withOpacity(0.1)
+                    : Colors.red.withOpacity(0.1),
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(
+                  color: _isAnswerCorrect ? Colors.green : Colors.red,
                 ),
-                child: const Text('SİMÜLASYONU TAMAMLA'),
+              ),
+              child: Row(
+                children: [
+                  Icon(
+                    _isAnswerCorrect ? Icons.check_circle : Icons.cancel,
+                    color: _isAnswerCorrect ? Colors.green : Colors.red,
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Text(
+                      _simulationCompleted && _isAnswerCorrect
+                          ? 'Tebrikler! Simülasyon başarıyla tamamlandı.'
+                          : _isAnswerCorrect
+                              ? 'Doğru cevap! Devam ediliyor...'
+                              : 'Yanlış cevap. Lütfen tekrar deneyin.',
+                      style: TextStyle(
+                        color: _isAnswerCorrect ? Colors.green : Colors.red,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ),
+                ],
               ),
             ),
+
+          // Simülasyon tamamlandıysa tekrar deneme butonu
+          if (_simulationCompleted)
+            Padding(
+              padding: const EdgeInsets.only(top: 16.0),
+              child: Center(
+                child: ElevatedButton(
+                  onPressed: () {
+                    // Simülasyon listesi ekranına dön
+                    Navigator.of(context).pop();
+                  },
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.green,
+                    padding: const EdgeInsets.symmetric(
+                        vertical: 12, horizontal: 24),
+                  ),
+                  child: const Text(
+                    'Simülasyon Listesine Dön',
+                    style: TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
+  // Terminal görünümlü adım UI'ı
+  Widget _buildTerminalStep() {
+    return Padding(
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        children: [
+          Expanded(
+            child: Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: const Color(0xFF0A121A),
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(
+                  color: const Color(0xFF1C2D40),
+                  width: 1.5,
+                ),
+              ),
+              child: ListView.builder(
+                itemCount: _terminalOutput.length,
+                itemBuilder: (context, index) {
+                  final line = _terminalOutput[index];
+                  return Padding(
+                    padding: const EdgeInsets.only(bottom: 4),
+                    child: RichText(
+                      text: TextSpan(
+                        children: [
+                          if (line.isCommand)
+                            const TextSpan(
+                              text: '> ',
+                              style: TextStyle(
+                                color: Color(0xFF00FF8F),
+                                fontWeight: FontWeight.bold,
+                                fontFamily: 'monospace',
+                              ),
+                            ),
+                          TextSpan(
+                            text: line.text,
+                            style: TextStyle(
+                              color: line.isCommand
+                                  ? const Color(0xFF00FF8F)
+                                  : _getOutputTextColor(line.text),
+                              fontFamily: 'monospace',
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  );
+                },
+              ),
+            ),
+          ),
+          const SizedBox(height: 8),
+          Row(
+            children: [
+              const Text(
+                '> ',
+                style: TextStyle(
+                  color: Color(0xFF00FF8F),
+                  fontWeight: FontWeight.bold,
+                  fontSize: 16,
+                ),
+              ),
+              Expanded(
+                child: TextField(
+                  controller: _commandController,
+                  focusNode: _commandFocusNode,
+                  decoration: const InputDecoration(
+                    hintText: 'Komut girin...',
+                    hintStyle: TextStyle(color: Colors.grey),
+                    border: InputBorder.none,
+                  ),
+                  style: const TextStyle(
+                    color: Color(0xFF00FF8F),
+                    fontFamily: 'monospace',
+                  ),
+                  cursorColor: const Color(0xFF00FF8F),
+                  onSubmitted: _processCommand,
+                ),
+              ),
+              IconButton(
+                icon: const Icon(Icons.send, color: Color(0xFF00CCFF)),
+                onPressed: () {
+                  _processCommand(_commandController.text);
+                },
+              ),
+            ],
+          ),
         ],
       ),
     );

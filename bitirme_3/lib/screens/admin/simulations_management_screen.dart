@@ -578,149 +578,296 @@ class _SimulationsManagementScreenState
     final expectedOutputController = TextEditingController();
     final orderController = TextEditingController(text: '1');
 
+    // Çoktan seçmeli yanıtlar için değişkenler
+    bool hasMultipleChoiceOptions = false;
+    List<Map<String, dynamic>> options = [];
+
+    void addNewOption() {
+      options.add({
+        'id': 'option${options.length + 1}',
+        'text': '',
+        'isCorrect': false,
+      });
+    }
+
+    // Başlangıç için bir seçenek ekle
+    addNewOption();
+
     showDialog(
       context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Simülasyon Adımı Ekle'),
-        content: SingleChildScrollView(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              TextField(
-                controller: titleController,
-                decoration: const InputDecoration(
-                  labelText: 'Başlık',
-                  hintText: 'Adım başlığını girin',
-                ),
-              ),
-              const SizedBox(height: 16),
-              TextField(
-                controller: descriptionController,
-                decoration: const InputDecoration(
-                  labelText: 'Açıklama',
-                  hintText: 'Adım açıklamasını girin',
-                ),
-                maxLines: 3,
-              ),
-              const SizedBox(height: 16),
-              TextField(
-                controller: commandsController,
-                decoration: const InputDecoration(
-                  labelText: 'Komutlar (virgülle ayırın)',
-                  hintText: 'Örn: git clone, cd project',
-                ),
-                maxLines: 2,
-              ),
-              const SizedBox(height: 16),
-              TextField(
-                controller: expectedOutputController,
-                decoration: const InputDecoration(
-                  labelText: 'Beklenen Çıktı',
-                  hintText: 'Komutların beklenen çıktısını girin',
-                ),
-                maxLines: 3,
-              ),
-              const SizedBox(height: 16),
-              TextField(
-                controller: orderController,
-                decoration: const InputDecoration(
-                  labelText: 'Sıra',
-                  hintText: 'Adım sırası',
-                ),
-                keyboardType: TextInputType.number,
-              ),
-            ],
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('İptal'),
-          ),
-          ElevatedButton(
-            onPressed: () async {
-              if (titleController.text.trim().isEmpty) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(
-                    content: Text('Başlık boş olamaz'),
-                    backgroundColor: Colors.red,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setState) => AlertDialog(
+          title: const Text('Simülasyon Adımı Ekle'),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                TextField(
+                  controller: titleController,
+                  decoration: const InputDecoration(
+                    labelText: 'Başlık',
+                    hintText: 'Adım başlığını girin',
                   ),
-                );
-                return;
-              }
+                ),
+                const SizedBox(height: 16),
+                TextField(
+                  controller: descriptionController,
+                  decoration: const InputDecoration(
+                    labelText: 'Açıklama',
+                    hintText: 'Adım açıklamasını girin',
+                  ),
+                  maxLines: 3,
+                ),
+                const SizedBox(height: 16),
 
-              try {
-                // Komutları virgülle ayırıp liste haline getir
-                List<String> commands = [];
-                if (commandsController.text.isNotEmpty) {
-                  commands = commandsController.text
-                      .split(',')
-                      .map((c) => c.trim())
-                      .where((c) => c.isNotEmpty)
-                      .toList();
-                }
+                // Adım türü seçimi
+                SwitchListTile(
+                  title: const Text('Çoktan Seçmeli Soru'),
+                  subtitle: const Text('Bu adım bir senaryo sorusu içerecek'),
+                  value: hasMultipleChoiceOptions,
+                  onChanged: (value) {
+                    setState(() {
+                      hasMultipleChoiceOptions = value;
+                    });
+                  },
+                ),
 
-                // Adım verisini hazırla
-                final stepData = {
-                  'title': titleController.text.trim(),
-                  'description': descriptionController.text.trim(),
-                  'commands': commands,
-                  'expectedOutput': expectedOutputController.text.trim(),
-                  'order': int.tryParse(orderController.text) ?? 1,
-                  'createdAt': FieldValue.serverTimestamp(),
-                  'updatedAt': FieldValue.serverTimestamp(),
-                };
+                const SizedBox(height: 16),
 
-                // Firebase'e ekle
-                await FirebaseFirestore.instance
-                    .collection('simulations')
-                    .doc(simulationId)
-                    .collection('steps')
-                    .add(stepData);
+                // Çoktan seçmeli soru ise şıkları göster
+                if (hasMultipleChoiceOptions) ...[
+                  const Divider(),
+                  const Text(
+                    'Seçenekler',
+                    style: TextStyle(
+                      fontWeight: FontWeight.bold,
+                      fontSize: 16,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  ...options.asMap().entries.map((entry) {
+                    final index = entry.key;
+                    final option = entry.value;
 
-                if (mounted) {
-                  Navigator.pop(context);
+                    return Padding(
+                      padding: const EdgeInsets.only(bottom: 16),
+                      child: Row(
+                        children: [
+                          Expanded(
+                            child: TextField(
+                              decoration: InputDecoration(
+                                labelText: 'Seçenek ${index + 1}',
+                                hintText: 'Şık içeriğini girin',
+                              ),
+                              onChanged: (value) {
+                                setState(() {
+                                  options[index]['text'] = value;
+                                });
+                              },
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          Checkbox(
+                            value: option['isCorrect'] as bool,
+                            onChanged: (value) {
+                              setState(() {
+                                options[index]['isCorrect'] = value ?? false;
+                              });
+                            },
+                          ),
+                          IconButton(
+                            icon: const Icon(Icons.delete, color: Colors.red),
+                            onPressed: options.length > 1
+                                ? () {
+                                    setState(() {
+                                      options.removeAt(index);
+                                    });
+                                  }
+                                : null,
+                          ),
+                        ],
+                      ),
+                    );
+                  }).toList(),
+                  ElevatedButton.icon(
+                    onPressed: () {
+                      setState(() {
+                        addNewOption();
+                      });
+                    },
+                    icon: const Icon(Icons.add),
+                    label: const Text('Seçenek Ekle'),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.green,
+                    ),
+                  ),
+                  const Divider(),
+                ] else ...[
+                  TextField(
+                    controller: commandsController,
+                    decoration: const InputDecoration(
+                      labelText: 'Komutlar (virgülle ayırın)',
+                      hintText: 'Örn: git clone, cd project',
+                    ),
+                    maxLines: 2,
+                  ),
+                  const SizedBox(height: 16),
+                  TextField(
+                    controller: expectedOutputController,
+                    decoration: const InputDecoration(
+                      labelText: 'Beklenen Çıktı',
+                      hintText: 'Komutların beklenen çıktısını girin',
+                    ),
+                    maxLines: 3,
+                  ),
+                ],
 
-                  // Adım ekledikten sonra listeyi güncelle
-                  _loadSimulations();
-
-                  // Başarı mesajı göster ve başka adım eklemek isteyip istemediğini sor
-                  final addAnother = await showDialog<bool>(
-                    context: context,
-                    builder: (context) => AlertDialog(
-                      title: const Text('Adım Eklendi'),
-                      content:
-                          const Text('Başka bir adım eklemek ister misiniz?'),
-                      actions: [
-                        TextButton(
-                          onPressed: () => Navigator.pop(context, false),
-                          child: const Text('Hayır'),
-                        ),
-                        ElevatedButton(
-                          onPressed: () => Navigator.pop(context, true),
-                          child: const Text('Evet'),
-                        ),
-                      ],
+                const SizedBox(height: 16),
+                TextField(
+                  controller: orderController,
+                  decoration: const InputDecoration(
+                    labelText: 'Sıra',
+                    hintText: 'Adım sırası',
+                  ),
+                  keyboardType: TextInputType.number,
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('İptal'),
+            ),
+            ElevatedButton(
+              onPressed: () async {
+                if (titleController.text.trim().isEmpty) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text('Başlık boş olamaz'),
+                      backgroundColor: Colors.red,
                     ),
                   );
+                  return;
+                }
 
-                  // Eğer başka adım eklemek istiyorsa formu tekrar aç
-                  if (addAnother == true) {
-                    _showAddStepDialog(simulationId);
+                // Çoktan seçmeli soru kontrolü
+                if (hasMultipleChoiceOptions) {
+                  // Boş seçenek kontrolü
+                  bool hasEmptyOption = false;
+                  for (var option in options) {
+                    if ((option['text'] as String).trim().isEmpty) {
+                      hasEmptyOption = true;
+                      break;
+                    }
+                  }
+
+                  if (hasEmptyOption) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        content: Text('Tüm seçenekler doldurulmalıdır'),
+                        backgroundColor: Colors.red,
+                      ),
+                    );
+                    return;
+                  }
+
+                  // Doğru cevap kontrolü
+                  bool hasCorrectAnswer =
+                      options.any((option) => option['isCorrect'] == true);
+                  if (!hasCorrectAnswer) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        content: Text('En az bir doğru cevap işaretlenmelidir'),
+                        backgroundColor: Colors.red,
+                      ),
+                    );
+                    return;
                   }
                 }
-              } catch (e) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(
-                    content: Text('Adım eklenirken hata oluştu: $e'),
-                    backgroundColor: Colors.red,
-                  ),
-                );
-              }
-            },
-            child: const Text('Ekle'),
-          ),
-        ],
+
+                try {
+                  // Çoktan seçmeli değilse, komutları virgülle ayırıp liste haline getir
+                  List<String> commands = [];
+                  if (!hasMultipleChoiceOptions &&
+                      commandsController.text.isNotEmpty) {
+                    commands = commandsController.text
+                        .split(',')
+                        .map((c) => c.trim())
+                        .where((c) => c.isNotEmpty)
+                        .toList();
+                  }
+
+                  // Adım verisini hazırla
+                  final stepData = {
+                    'title': titleController.text.trim(),
+                    'description': descriptionController.text.trim(),
+                    'commands': commands,
+                    'expectedOutput': hasMultipleChoiceOptions
+                        ? ''
+                        : expectedOutputController.text.trim(),
+                    'order': int.tryParse(orderController.text) ?? 1,
+                    'createdAt': FieldValue.serverTimestamp(),
+                    'updatedAt': FieldValue.serverTimestamp(),
+                    'hasMultipleChoiceOptions': hasMultipleChoiceOptions,
+                  };
+
+                  // Eğer çoktan seçmeli bir soruysa şıkları ekle
+                  if (hasMultipleChoiceOptions) {
+                    stepData['options'] = options;
+                  }
+
+                  // Firebase'e ekle
+                  await FirebaseFirestore.instance
+                      .collection('simulations')
+                      .doc(simulationId)
+                      .collection('steps')
+                      .add(stepData);
+
+                  if (mounted) {
+                    Navigator.pop(context);
+
+                    // Adım ekledikten sonra listeyi güncelle
+                    _loadSimulations();
+
+                    // Başarı mesajı göster ve başka adım eklemek isteyip istemediğini sor
+                    final addAnother = await showDialog<bool>(
+                      context: context,
+                      builder: (context) => AlertDialog(
+                        title: const Text('Adım Eklendi'),
+                        content:
+                            const Text('Başka bir adım eklemek ister misiniz?'),
+                        actions: [
+                          TextButton(
+                            onPressed: () => Navigator.pop(context, false),
+                            child: const Text('Hayır'),
+                          ),
+                          ElevatedButton(
+                            onPressed: () => Navigator.pop(context, true),
+                            child: const Text('Evet'),
+                          ),
+                        ],
+                      ),
+                    );
+
+                    // Eğer başka adım eklemek istiyorsa formu tekrar aç
+                    if (addAnother == true) {
+                      _showAddStepDialog(simulationId);
+                    }
+                  }
+                } catch (e) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text('Adım eklenirken hata oluştu: $e'),
+                      backgroundColor: Colors.red,
+                    ),
+                  );
+                }
+              },
+              child: const Text('Ekle'),
+            ),
+          ],
+        ),
       ),
     );
   }

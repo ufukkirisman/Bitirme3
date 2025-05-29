@@ -25,25 +25,31 @@ class _ModulesScreenState extends State<ModulesScreen> {
 
   Future<void> _fetchModules() async {
     try {
-      setState(() {
-        _isLoading = true;
-        _errorMessage = '';
-      });
+      if (mounted) {
+        setState(() {
+          _isLoading = true;
+          _errorMessage = '';
+        });
+      }
 
       final modulesSnapshot = await FirebaseFirestore.instance
           .collection('modules')
           .orderBy('order', descending: false)
           .get();
 
-      setState(() {
-        _modules = modulesSnapshot.docs;
-        _isLoading = false;
-      });
+      if (mounted) {
+        setState(() {
+          _modules = modulesSnapshot.docs;
+          _isLoading = false;
+        });
+      }
     } catch (e) {
-      setState(() {
-        _isLoading = false;
-        _errorMessage = 'Modüller yüklenirken hata oluştu: $e';
-      });
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+          _errorMessage = 'Modüller yüklenirken hata oluştu: $e';
+        });
+      }
     }
   }
 

@@ -132,6 +132,10 @@ class SimulationStep {
   final String? expectedCommand;
   final String? hint;
   final bool isCompleted;
+  final List<SimulationOption>?
+      options; // Çoktan seçmeli yanıtlar için seçenekler
+  final bool
+      hasMultipleChoiceOptions; // Adımın çoktan seçmeli bir soru içerip içermediği
 
   SimulationStep({
     required this.id,
@@ -143,12 +147,23 @@ class SimulationStep {
     this.expectedCommand,
     this.hint,
     this.isCompleted = false,
+    this.options,
+    this.hasMultipleChoiceOptions = false,
   });
 
   factory SimulationStep.fromMap(Map<String, dynamic> map) {
     List<String> commandsList = [];
     if (map['commands'] != null) {
       commandsList = List<String>.from(map['commands']);
+    }
+
+    List<SimulationOption>? optionsList;
+    if (map['options'] != null) {
+      optionsList = List<SimulationOption>.from(
+        (map['options'] as List).map(
+          (option) => SimulationOption.fromMap(option),
+        ),
+      );
     }
 
     return SimulationStep(
@@ -161,6 +176,8 @@ class SimulationStep {
       expectedCommand: map['expectedCommand'],
       hint: map['hint'],
       isCompleted: map['isCompleted'] ?? false,
+      options: optionsList,
+      hasMultipleChoiceOptions: map['hasMultipleChoiceOptions'] ?? false,
     );
   }
 
@@ -173,6 +190,7 @@ class SimulationStep {
       'commands': commands,
       'expectedOutput': expectedOutput,
       'isCompleted': isCompleted,
+      'hasMultipleChoiceOptions': hasMultipleChoiceOptions,
     };
 
     if (expectedCommand != null) {
@@ -183,7 +201,39 @@ class SimulationStep {
       result['hint'] = hint;
     }
 
+    if (options != null) {
+      result['options'] = options!.map((option) => option.toMap()).toList();
+    }
+
     return result;
+  }
+}
+
+class SimulationOption {
+  final String id;
+  final String text;
+  final bool isCorrect;
+
+  SimulationOption({
+    required this.id,
+    required this.text,
+    required this.isCorrect,
+  });
+
+  factory SimulationOption.fromMap(Map<String, dynamic> map) {
+    return SimulationOption(
+      id: map['id'] ?? '',
+      text: map['text'] ?? '',
+      isCorrect: map['isCorrect'] ?? false,
+    );
+  }
+
+  Map<String, dynamic> toMap() {
+    return {
+      'id': id,
+      'text': text,
+      'isCorrect': isCorrect,
+    };
   }
 }
 

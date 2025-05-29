@@ -29,10 +29,12 @@ class _ModuleDetailScreenState extends State<ModuleDetailScreen> {
 
   Future<void> _fetchModuleDetails() async {
     try {
-      setState(() {
-        _isLoading = true;
-        _errorMessage = '';
-      });
+      if (mounted) {
+        setState(() {
+          _isLoading = true;
+          _errorMessage = '';
+        });
+      }
 
       final moduleDoc = await FirebaseFirestore.instance
           .collection('modules')
@@ -40,22 +42,28 @@ class _ModuleDetailScreenState extends State<ModuleDetailScreen> {
           .get();
 
       if (!moduleDoc.exists) {
-        setState(() {
-          _isLoading = false;
-          _errorMessage = 'Modül bulunamadı';
-        });
+        if (mounted) {
+          setState(() {
+            _isLoading = false;
+            _errorMessage = 'Modül bulunamadı';
+          });
+        }
         return;
       }
 
-      setState(() {
-        _moduleData = moduleDoc.data();
-        _isLoading = false;
-      });
+      if (mounted) {
+        setState(() {
+          _moduleData = moduleDoc.data();
+          _isLoading = false;
+        });
+      }
     } catch (e) {
-      setState(() {
-        _isLoading = false;
-        _errorMessage = 'Modül detayları yüklenirken hata oluştu: $e';
-      });
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+          _errorMessage = 'Modül detayları yüklenirken hata oluştu: $e';
+        });
+      }
     }
   }
 

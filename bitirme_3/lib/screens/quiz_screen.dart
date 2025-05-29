@@ -49,19 +49,23 @@ class _QuizScreenState extends State<QuizScreen> {
 
   Future<void> _fetchQuizDetails() async {
     try {
-      setState(() {
-        _isLoading = true;
-        _errorMessage = '';
-      });
+      if (mounted) {
+        setState(() {
+          _isLoading = true;
+          _errorMessage = '';
+        });
+      }
 
       // Quiz verilerini ModuleService üzerinden al
       final quiz = await _moduleService.getQuizById(widget.quizId);
 
       if (quiz == null) {
-        setState(() {
-          _isLoading = false;
-          _errorMessage = 'Quiz bulunamadı';
-        });
+        if (mounted) {
+          setState(() {
+            _isLoading = false;
+            _errorMessage = 'Quiz bulunamadı';
+          });
+        }
         return;
       }
 
@@ -75,15 +79,19 @@ class _QuizScreenState extends State<QuizScreen> {
       _timeRemaining = quiz.timeLimit * 60; // dakikayı saniyeye çevir
       _startTimer();
 
-      setState(() {
-        _quiz = quiz;
-        _isLoading = false;
-      });
+      if (mounted) {
+        setState(() {
+          _quiz = quiz;
+          _isLoading = false;
+        });
+      }
     } catch (e) {
-      setState(() {
-        _isLoading = false;
-        _errorMessage = 'Quiz detayları yüklenirken hata oluştu: $e';
-      });
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+          _errorMessage = 'Quiz detayları yüklenirken hata oluştu: $e';
+        });
+      }
       print('Quiz detayları yüklenirken hata: $e');
     }
   }
@@ -91,9 +99,11 @@ class _QuizScreenState extends State<QuizScreen> {
   void _startTimer() {
     _timer = Timer.periodic(const Duration(seconds: 1), (timer) {
       if (_timeRemaining > 0) {
-        setState(() {
-          _timeRemaining--;
-        });
+        if (mounted) {
+          setState(() {
+            _timeRemaining--;
+          });
+        }
       } else {
         _submitQuiz();
       }
@@ -120,9 +130,11 @@ class _QuizScreenState extends State<QuizScreen> {
       }
     });
 
-    setState(() {
-      _quizCompleted = true;
-    });
+    if (mounted) {
+      setState(() {
+        _quizCompleted = true;
+      });
+    }
 
     // Quiz sonucunu Firestore'a kaydet
     _saveQuizResult();
@@ -162,16 +174,20 @@ class _QuizScreenState extends State<QuizScreen> {
   }
 
   void _selectAnswer(int answerIndex) {
-    setState(() {
-      _userAnswers[_currentQuestionIndex] = answerIndex;
-    });
+    if (mounted) {
+      setState(() {
+        _userAnswers[_currentQuestionIndex] = answerIndex;
+      });
+    }
   }
 
   void _nextQuestion() {
     if (_currentQuestionIndex < _quiz!.questions.length - 1) {
-      setState(() {
-        _currentQuestionIndex++;
-      });
+      if (mounted) {
+        setState(() {
+          _currentQuestionIndex++;
+        });
+      }
     } else {
       _submitQuiz();
     }
@@ -179,9 +195,11 @@ class _QuizScreenState extends State<QuizScreen> {
 
   void _previousQuestion() {
     if (_currentQuestionIndex > 0) {
-      setState(() {
-        _currentQuestionIndex--;
-      });
+      if (mounted) {
+        setState(() {
+          _currentQuestionIndex--;
+        });
+      }
     }
   }
 
